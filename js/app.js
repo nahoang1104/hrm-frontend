@@ -8,24 +8,25 @@ const CHILD={
   work:{t:'Quá trình công tác',f:[{k:'company',l:'Công ty',r:1},{k:'department',l:'Phòng ban'},{k:'position',l:'Chức vụ',r:1},{k:'fromDate',l:'Từ ngày',t:'date',r:1},{k:'toDate',l:'Đến ngày',t:'date'},{k:'description',l:'Mô tả',t:'textarea'}],c:['company','department','position','fromDate','toDate']},
   degrees:{t:'Bằng cấp',f:[{k:'name',l:'Tên bằng',r:1},{k:'major',l:'Chuyên ngành'},{k:'school',l:'Trường'},{k:'issuedDate',l:'Ngày cấp',t:'date'},{k:'file',l:'File (JPG/PNG/WebP/PDF ≤5MB)',t:'file',a:DOC}],c:['name','major','school','issuedDate']},
   certificates:{t:'Chứng chỉ',f:[{k:'name',l:'Tên chứng chỉ',r:1},{k:'issuer',l:'Nơi cấp'},{k:'certificateNumber',l:'Số hiệu'},{k:'issuedDate',l:'Ngày cấp',t:'date'},{k:'expiredDate',l:'Hết hạn',t:'date'},{k:'file',l:'File (JPG/PNG/WebP/PDF ≤5MB)',t:'file',a:DOC}],c:['name','issuer','certificateNumber','issuedDate','expiredDate']}};
-const FAM_F=[{k:'relation',l:'Mối quan hệ',r:1,dl:['Cha','Mẹ','Vợ','Chồng','Con','Anh','Chị','Em','Ông','Bà','Cháu','Chú','Bác','Cô','Dì','Cậu','Người thân']},{k:'fullName',l:'Họ tên',r:1},{k:'dateOfBirth',l:'Ngày sinh',t:'date'},{k:'gender',l:'Giới tính',t:'select',o:[['','—'],...GENDER]},{k:'nationality',l:'Quốc tịch'},{k:'citizenID',l:'CCCD',n:1},{k:'address',l:'Địa chỉ'},{k:'email',l:'Email',t:'email'},{k:'phone',l:'Điện thoại',n:1}];
-const PROFILE_F=[{k:'fullName',l:'Họ tên',r:1},{k:'gender',l:'Giới tính',t:'select',o:GENDER},{k:'nationality',l:'Quốc tịch',r:1},{k:'dateOfBirth',l:'Ngày sinh',t:'date',r:1},{k:'citizenID',l:'CCCD',r:1,n:1},{k:'phone',l:'Điện thoại',r:1,n:1},{k:'email',l:'Email',t:'email',r:1},{k:'address',l:'Địa chỉ'}];
+const FAM_F=[{k:'relation',l:'Mối quan hệ',r:1,dl:['Cha','Mẹ','Vợ','Chồng','Con','Anh','Chị','Em','Ông','Bà','Cháu','Chú','Bác','Cô','Dì','Cậu','Người thân']},{k:'fullName',l:'Họ tên',r:1},{k:'dateOfBirth',l:'Ngày sinh',t:'date'},{k:'gender',l:'Giới tính',t:'select',o:[['','—'],...GENDER]},{k:'nationality',l:'Quốc tịch'},{k:'citizenID',l:'CCCD',n:1},{k:'address',l:'Địa chỉ',full:1},{k:'email',l:'Email',t:'email'},{k:'phone',l:'Điện thoại',n:1}];
+const PROFILE_F=[{k:'fullName',l:'Họ tên',r:1},{k:'gender',l:'Giới tính',t:'select',o:GENDER},{k:'nationality',l:'Quốc tịch',r:1},{k:'dateOfBirth',l:'Ngày sinh',t:'date',r:1},{k:'citizenID',l:'CCCD',r:1,n:1},{k:'phone',l:'Điện thoại',r:1,n:1},{k:'email',l:'Email',t:'email',r:1},{k:'address',l:'Địa chỉ',full:1}];
 const CONTACT_F=PROFILE_F.filter(f=>['phone','email','address'].includes(f.k));
 let ME=null,TAB='profile',FILTER={q:'',role:'',status:'',page:1},AF={q:'',action:'',from:'',to:'',page:1};
 const pager=(r,w)=>`<div class="bar"><span style="color:var(--mut)">Hiển thị dòng ${r.items.length?(r.page-1)*r.pageSize+1:0} - ${(r.page-1)*r.pageSize+r.items.length} · Trang <input class="pgin" type="number" min="1" value="${r.page}" data-pgin="${w}" title="Nhập số trang rồi nhấn Enter"></span><div class="sp"></div>${[['« Đầu',1],['Trước',r.page-1],['Sau',r.page+1],['Cuối »',r.pages]].map(([l,n],i)=>`<button class="sm" data-act="pg" data-w="${w}" data-p="${n}" ${(i<2?r.page<=1:r.page>=r.pages)?'disabled':''}>${l}</button>`).join('')}</div>`;
 
 function toast(m){const t=$('#toast');t.textContent=m;t.style.display='block';clearTimeout(toast.h);toast.h=setTimeout(()=>t.style.display='none',3500)}
-const fld=(f,vals,pre='')=>`<label>${esc(f.l)}${f.r?' *':''}${f.t==='select'?`<select name="${pre}${f.k}">${f.o.map(([v,t])=>`<option value="${esc(v)}" ${String(vals[f.k])===v?'selected':''}>${esc(t)}</option>`).join('')}</select>`:f.t==='textarea'?`<textarea name="${pre}${f.k}">${esc(vals[f.k])}</textarea>`:`<input name="${pre}${f.k}" type="${f.t||'text'}" ${f.r?'required':''} ${f.a?`accept="${f.a}"`:''} ${f.n?'inputmode="numeric" pattern="[0-9]+" title="Chỉ nhập chữ số"':''} ${f.t==='date'&&API.maxDate(f.k)?`max="${API.maxDate(f.k)}"`:''} ${f.t==='file'?'':`value="${esc(vals[f.k])}"`}${f.dl?` list="dl-${pre}${f.k}"`:''}>${f.dl?`<datalist id="dl-${pre}${f.k}">${f.dl.map(x=>`<option value="${x}">`).join('')}</datalist>`:''}`}</label>`;
+const fld=(f,vals,pre='')=>`<label${f.full?' class="full"':''}>${esc(f.l)}${f.r?' *':''}${f.t==='select'?`<select name="${pre}${f.k}">${f.o.map(([v,t])=>`<option value="${esc(v)}" ${String(vals[f.k])===v?'selected':''}>${esc(t)}</option>`).join('')}</select>`:f.t==='textarea'?`<textarea name="${pre}${f.k}">${esc(vals[f.k])}</textarea>`:`<input name="${pre}${f.k}" type="${f.t||'text'}" ${f.r?'required':''} ${f.a?`accept="${f.a}"`:''} ${f.n?'inputmode="numeric" pattern="[0-9]+" title="Chỉ nhập chữ số"':''} ${f.t==='date'&&API.maxDate(f.k)?`max="${API.maxDate(f.k)}"`:''} ${f.t==='file'?'':`value="${esc(vals[f.k])}"`}${f.dl?` list="dl-${pre}${f.k}"`:''}>${f.dl?`<datalist id="dl-${pre}${f.k}">${f.dl.map(x=>`<option value="${x}">`).join('')}</datalist>`:''}`}</label>`;
 function form(title,fields,vals,submit,ok='Lưu',hook){
-  const d=document.createElement('dialog');
-  d.innerHTML=`<form><h3>${esc(title)}</h3>${hook&&hook.top||''}${fields.map(f=>fld(f,vals)).join('')}${hook&&hook.html||''}<div class="err"></div><div class="row"><button type="button" data-x>Hủy</button><button class="pri">${ok}</button></div></form>`;
+    const d=document.createElement('dialog'),grid=fields.length>4,body=fields.map(f=>(f.sec?`<div class="fsec">${esc(f.sec)}</div>`:'')+fld(f,vals)).join('');
+  d.className=grid?'wide':'';
+  d.innerHTML=`<form><h3>${esc(title)}</h3>${hook&&hook.top||''}<div class="${grid?'fgrid':''}">${body}</div>${hook&&hook.html||''}<div class="err"></div><div class="row"><button type="button" data-x>Hủy</button><button class="pri">${ok}</button></div></form>`;
   document.body.append(d);d.showModal();d.querySelector('[data-x]').onclick=()=>d.close();d.onclose=()=>d.remove();if(hook)hook.init(d);
   d.querySelector('form').onsubmit=async e=>{e.preventDefault();const data={};for(const f of fields){const el=e.target.elements[f.k];data[f.k]=f.t==='file'?el.files[0]:el.value}
     if(hook)hook.collect(e.target,data);
     try{await submit(data);d.close()}catch(x){d.querySelector('.err').textContent=x.message}}}
 // Khối "thêm chức vụ / công tác / bằng cấp / chứng chỉ" trong form tạo người dùng
 function kidsHook(){let n=0;return{
-  html:`<div class="kids"><div class="bar">${Object.entries(CHILD).map(([k,c])=>`<button type="button" class="sm" data-addkid="${k}">+ ${c.t}</button>`).join('')}</div><div class="kidlist"></div></div>`,
+  html:`<div class="fsec">Thông tin bổ sung (tuỳ chọn)</div><div class="kids"><div class="bar">${Object.entries(CHILD).map(([k,c])=>`<button type="button" class="sm" data-addkid="${k}">+ ${c.t}</button>`).join('')}</div><div class="kidlist"></div></div>`,
   init(d){d.querySelector('.kids').onclick=e=>{const b=e.target.closest('[data-addkid]');
     if(e.target.closest('[data-rmkid]'))e.target.closest('fieldset').remove();
     if(b){const k=b.dataset.addkid,c=CHILD[k],fs=document.createElement('fieldset'),i=n++;fs.dataset.kind=k;fs.dataset.i=i;
@@ -35,13 +36,23 @@ function kidsHook(){let n=0;return{
     (data.kids[k]=data.kids[k]||[]).push(row)})}}}
 const run=async f=>{try{await f()}catch(x){toast(x.message)}};
 
-function shell(html){
-  const nav=[['profile','Hồ sơ cá nhân',1],['users','Nhân sự',ME.role!=='EMPLOYEE'],['audit','Nhật ký',ME.role==='SUPER_ADMIN']].filter(n=>n[2]);
-  const cur=location.hash.split('/')[1]||'profile';
-  $('#app').innerHTML=`<div class="shell"><nav><b>HRM</b>${nav.map(([k,l])=>`<a data-go="${k}" class="${cur===k?'on':''}">${l}</a>`).join('')}<div class="sp"></div><a data-act="dir">Thư mục uploads</a><a data-act="pw">Đổi mật khẩu</a><a data-act="logout">Đăng xuất (${esc(ME.username)})</a><small style="padding:6px 12px;color:#8fa3b8">Dữ liệu: ${Store.mode==='kio'?'KIO':'Local'}</small></nav><main>${html}</main></div>`;
-  document.querySelectorAll('[data-fid]').forEach(async i=>{try{i.src=await API.fileUrl(i.dataset.fid)}catch{}})}
+const AVA={}; // cache blob URL theo fileId để không đọc lại file mỗi lần vẽ sidebar
+async function myAvatar(){const el=$('#meAva');if(!el)return;
+  try{const fid=(await API.getUser(ME.id)).profile.profilePictureFileId;if(!fid)return;
+    const url=AVA[fid]||(AVA[fid]=await API.fileUrl(fid));
+    if(el.isConnected)el.innerHTML=`<img src="${esc(url)}" alt="" onerror="this.parentNode.textContent=this.parentNode.dataset.ini">`}catch{}}
 
-function loginView(){$('#app').innerHTML=`<div class="card login"><h2>Đăng nhập</h2><form id="lf"><label>Tên đăng nhập<input name="u" required autofocus></label><label>Mật khẩu<input name="p" type="password" required></label><div class="err" id="le"></div><button class="pri" style="width:100%">Đăng nhập</button></form></div>`;
+const ini=n=>String(n||'').trim().split(/\s+/).slice(-2).map(w=>w[0]||'').join('').toUpperCase();
+const avaBox=(fid,name,cls='')=>`<span class="ava-box ${cls}">${fid?`<img data-fid="${esc(fid)}" alt="" onerror="this.remove()">`:''}<b>${esc(ini(name))}</b></span>`;
+
+function shell(html){
+  const nav=[['profile','Hồ sơ cá nhân','fa-id-card',1],['users','Nhân sự','fa-users',ME.role!=='EMPLOYEE'],['audit','Nhật ký','fa-clock-rotate-left',ME.role==='SUPER_ADMIN']].filter(n=>n[3]);
+  const cur=location.hash.split('/')[1]||'profile',title=(nav.find(n=>n[0]===cur)||nav[0])[1];
+  $('#app').innerHTML=`<div class="shell"><nav><div class="brand"><span class="brand-logo"><i class="fa-solid fa-users"></i></span><div><div class="brand-name">HRM</div><div class="brand-sub">Quản lý nhân sự</div></div></div><div class="nav-group">Menu</div>${nav.map(([k,l,ic])=>`<a data-go="${k}" class="${cur===k?'on':''}"><i class="fa-solid ${ic}"></i>${l}</a>`).join('')}<div class="sp"></div><div class="nav-group">Hệ thống</div><a data-act="dir"><i class="fa-regular fa-folder-open"></i>Thư mục uploads</a><a data-act="pw"><i class="fa-solid fa-key"></i>Đổi mật khẩu</a><div class="side-user"><span class="avatar" id="meAva" data-ini="${esc(ME.username.slice(0,2).toUpperCase())}">${esc(ME.username.slice(0,2).toUpperCase())}</span><div><div class="side-user-name">${esc(ME.username)}</div><div class="side-user-role">${RL[ME.role]}</div></div></div><a data-act="logout"><i class="fa-solid fa-right-from-bracket"></i>Đăng xuất</a></nav><main><div class="topbar"><span class="crumb-title">${title}</span><div class="sp"></div><span class="chip"><i class="fa-solid fa-database"></i>Dữ liệu: ${Store.mode==='kio'?'KIO':'Local'}</span></div><div class="view">${html}</div></main></div>`;
+  document.querySelectorAll('[data-fid]').forEach(async i=>{try{i.src=await API.fileUrl(i.dataset.fid)}catch{}});
+  myAvatar()}
+
+function loginView(){$('#app').innerHTML=`<div class="card login"><div class="brand-logo lg"><i class="fa-solid fa-users"></i></div><h2>Đăng nhập</h2><p class="sub">Hệ thống quản lý nhân sự</p><form id="lf"><label>Tên đăng nhập<input name="u" required autofocus></label><label>Mật khẩu<input name="p" type="password" required></label><div class="err" id="le"></div><button class="pri" style="width:100%">Đăng nhập</button></form></div>`;
   $('#lf').onsubmit=async e=>{e.preventDefault();try{await API.login(e.target.u.value,e.target.p.value);boot()}catch(x){$('#le').textContent=x.message}}}
 function forceChange(){$('#app').innerHTML='<div class="card login"><h2>Đổi mật khẩu</h2><p>Bạn cần đặt mật khẩu mới trước khi tiếp tục.</p><button class="pri" data-act="pw">Đặt mật khẩu mới</button></div>';A.pw()}
 
@@ -50,10 +61,11 @@ async function profileView(id){
   const d=await API.getUser(id),u=d.user,p=d.profile,mng=API.canManage(ME,u),self=ME.id===id,editC=k=>k==='positions'||k==='work'?mng:(mng||self);
   const tabs=[['profile','Hồ sơ'],...Object.entries(CHILD).map(([k,c])=>[k,c.t]),['family','Gia phả']];if(!tabs.some(t=>t[0]===TAB))TAB='profile';
   let body;
-  if(TAB==='profile')body=`<img class="ava" data-fid="${esc(p.profilePictureFileId)}" alt="">${kv(p,PROFILE_F.map(f=>[f.k,f.l]))}<div class="kv"><span>Tên đăng nhập</span><span>${esc(u.username)}</span><span>Vai trò</span><span>${RL[u.role]}</span><span>Trạng thái</span><span><span class="tag ${u.status}">${ST[u.status]}</span></span></div><div class="row" style="justify-content:flex-start">${mng||self?`<button data-act="editp" data-id="${id}">Sửa hồ sơ</button>`:''}</div>`;
+  const head=`<div class="card phead">${avaBox(p.profilePictureFileId,p.fullName||u.username,'xl')}<div class="phead-info"><h2>${esc(p.fullName||u.username)}</h2><div class="phead-sub">@${esc(u.username)}</div><div class="phead-tags"><span class="tag ${u.role}">${RL[u.role]}</span><span class="tag ${u.status}">${ST[u.status]}</span></div></div>${mng||self?`<button data-act="editp" data-id="${id}"><i class="fa-solid fa-pen"></i>Sửa hồ sơ</button>`:''}</div>`;
+  if(TAB==='profile')body=kv(p,PROFILE_F.map(f=>[f.k,f.l]));
   else if(TAB==='family')body=famBody(d,id,editC('family'));
   else{const c=CHILD[TAB],rows=d[TAB];body=`${editC(TAB)?`<div class="bar"><div class="sp"></div><button class="pri" data-act="add" data-id="${id}" data-kind="${TAB}">Thêm ${c.t.toLowerCase()}</button></div>`:''}<table><tr>${c.f.filter(f=>f.t!=='file'&&c.c.includes(f.k)).map(f=>`<th>${f.l}</th>`).join('')}<th></th></tr>${rows.map(r=>`<tr>${c.f.filter(f=>f.t!=='file'&&c.c.includes(f.k)).map(f=>`<td>${esc(f.k==='isCurrent'?(String(r[f.k])==='true'?'Có':'Không'):r[f.k])}</td>`).join('')}<td>${r.fileId?`<button class="sm" data-act="open" data-id="${r.fileId}">Xem file</button> `:''}${TAB==='work'?`<button class="sm" data-act="view" data-id="${r.id}" data-kind="${TAB}" data-uid="${id}">Chi tiết</button> `:''}${editC(TAB)?`<button class="sm" data-act="editc" data-id="${id}" data-kind="${TAB}" data-rid="${r.id}">Sửa</button> <button class="sm bad" data-act="delc" data-id="${id}" data-kind="${TAB}" data-rid="${r.id}">Xóa</button>`:''}</td></tr>`).join('')||`<tr><td colspan="9">Chưa có dữ liệu.</td></tr>`}</table>`}
-  VIEW={d};shell(`<h2>${esc(p.fullName||u.username)}</h2><div class="tabs">${tabs.map(([k,l])=>`<a data-tab="${k}" data-id="${id}" class="${TAB===k?'on':''}">${l}</a>`).join('')}</div><div class="card">${body}</div>`)}
+  VIEW={d};shell(`${head}<div class="tabs">${tabs.map(([k,l])=>`<a data-tab="${k}" data-id="${id}" class="${TAB===k?'on':''}">${l}</a>`).join('')}</div><div class="card">${body}</div>`)}
 let VIEW={};
 const famBody=(d,id,canEdit)=>`${canEdit?`<div class="bar"><div class="sp"></div><button class="pri" data-act="addf" data-id="${id}">Thêm người thân</button></div>`:''}<table><tr><th>Họ tên</th><th>Mối quan hệ</th><th></th></tr>${d.family.map(r=>`<tr><td>${esc(r.fullName)}${r.linked?' <span class="tag">Nhân sự</span>':''}</td><td>${esc(r.relation)}</td><td><button class="sm" data-act="viewf" data-rid="${r.id}">Xem chi tiết</button>${r.canOpen?` <button class="sm" data-go="users/${r.linkedUserId}">Xem hồ sơ</button>`:''}${canEdit?` <button class="sm" data-act="editf" data-id="${id}" data-rid="${r.id}">Sửa</button> <button class="sm bad" data-act="delf" data-id="${id}" data-rid="${r.id}">Xóa</button>`:''}</td></tr>`).join('')||'<tr><td colspan="3">Chưa có dữ liệu.</td></tr>'}</table>`;
 // Khối tìm nhân sự để điền sẵn khi thêm người thân
@@ -70,10 +82,18 @@ function famHook(ownerId){let linkId=null;const HIDE=()=>FAM_HIDE;return{
     d.querySelector('#fgo').onclick=search;frm.elements.fq.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();search()}}},
   collect(frm,data){data.linkId=linkId}}}
 
+function userMenu(r,m,self,sa){const live=r.status!=='DELETED',it=[],b=(act,ic,l,x='',c='')=>`<button class="${c}" data-act="${act}" data-id="${r.id}"${x}><i class="fa-solid ${ic}"></i>${l}</button>`;
+  if(m&&!self&&live){const lk=r.status==='LOCKED';it.push(b('lock',lk?'fa-lock-open':'fa-lock',lk?'Mở khóa':'Khóa tài khoản',` data-s="${lk?'ACTIVE':'LOCKED'}"`),b('reset','fa-key','Đặt lại mật khẩu'))}
+  if(sa&&!self&&live)it.push(b('role','fa-user-shield','Đổi vai trò',` data-r="${r.role}"`));
+  if(!sa&&r.role==='EMPLOYEE'&&live)it.push(b('promote','fa-arrow-up','Nâng lên QLNS'));
+  if(m&&!self&&live)it.push('<hr>',b('del','fa-trash','Xóa tài khoản','','bad'));
+  if(sa&&!live)it.push(b('restore','fa-rotate-left','Khôi phục'),'<hr>',b('hard','fa-trash','Xóa cứng','','bad'));
+  return it.length?`<details class="more"><summary class="btn-ico" title="Thao tác"><i class="fa-solid fa-ellipsis"></i></summary><div class="menu">${it.join('')}</div></details>`:''}
+
 async function usersView(){
   const res=await API.listUsers(FILTER),rows=res.items,sa=ME.role==='SUPER_ADMIN';
   shell(`<h2>Nhân sự</h2><div class="bar"><input id="q" placeholder="Tìm họ tên, tài khoản, email, SĐT, CCCD" value="${esc(FILTER.q)}"><select id="fr"><option value="">Mọi vai trò</option>${Object.entries(RL).map(([k,v])=>`<option value="${k}" ${FILTER.role===k?'selected':''}>${v}</option>`).join('')}</select><select id="fs"><option value="">Mọi trạng thái</option>${Object.entries(ST).map(([k,v])=>`<option value="${k}" ${FILTER.status===k?'selected':''}>${v}</option>`).join('')}</select><div class="sp"></div><button class="pri" data-act="newu">Thêm người dùng</button></div>
-  <div class="card"><table><tr><th>Họ tên</th><th>Tài khoản</th><th>Vai trò</th><th>Trạng thái</th><th>Liên hệ</th><th></th></tr>${rows.map(r=>{const m=API.canManage(ME,r),self=r.id===ME.id;return`<tr><td>${esc(r.fullName)}</td><td>${esc(r.username)}</td><td>${RL[r.role]}</td><td><span class="tag ${r.status}">${ST[r.status]}</span></td><td>${esc(r.phone)}<br>${esc(r.email)}</td><td><button class="sm" data-go="users/${r.id}">Xem</button>${m&&!self&&r.status!=='DELETED'?` <button class="sm" data-act="lock" data-id="${r.id}" data-s="${r.status==='LOCKED'?'ACTIVE':'LOCKED'}">${r.status==='LOCKED'?'Mở khóa':'Khóa'}</button> <button class="sm" data-act="reset" data-id="${r.id}">Reset MK</button> <button class="sm bad" data-act="del" data-id="${r.id}">Xóa</button>`:''}${sa&&!self&&r.status!=='DELETED'?` <button class="sm" data-act="role" data-id="${r.id}" data-r="${r.role}">Đổi role</button>`:''}${!sa&&r.role==='EMPLOYEE'&&r.status!=='DELETED'?` <button class="sm" data-act="promote" data-id="${r.id}">Nâng lên QLNS</button>`:''}${sa&&r.status==='DELETED'?` <button class="sm" data-act="restore" data-id="${r.id}">Khôi phục</button> <button class="sm bad" data-act="hard" data-id="${r.id}">Xóa cứng</button>`:''}</td></tr>`}).join('')||'<tr><td colspan="6">Không có kết quả.</td></tr>'}</table>${pager(res,'users')}</div>`);FILTER.page=res.page;
+  <div class="card"><table><tr><th>Nhân sự</th><th>Vai trò</th><th>Trạng thái</th><th>Liên hệ</th><th></th></tr>${rows.map(r=>{const m=API.canManage(ME,r),self=r.id===ME.id;return`<tr><td><div class="usercell">${avaBox(r.profilePictureFileId,r.fullName||r.username)}<div><div class="cell-main">${esc(r.fullName)}</div><div class="cell-sub">@${esc(r.username)}</div></div></div></td><td><span class="tag ${r.role}">${RL[r.role]}</span></td><td><span class="tag ${r.status}">${ST[r.status]}</span></td><td><div>${esc(r.phone)||'—'}</div><div class="cell-sub">${esc(r.email)}</div></td><td class="acts"><button class="sm" data-go="users/${r.id}">Xem</button>${userMenu(r,m,self,sa)}</td></tr>`}).join('')||'<tr><td colspan="5">Không có kết quả.</td></tr>'}</table>${pager(res,'users')}</div>`);FILTER.page=res.page;
   const re=()=>{FILTER={q:$('#q').value,role:$('#fr').value,status:$('#fs').value,page:1};usersView().then(()=>{const q=$('#q');q.focus();q.setSelectionRange(99,99)}).catch(x=>toast(x.message))};
   $('#q').oninput=()=>{clearTimeout(re.h);re.h=setTimeout(re,250)};$('#fr').onchange=re;$('#fs').onchange=re}
 async function auditView(){
@@ -95,7 +115,7 @@ const A={
   pg(e){(e.w==='users'?FILTER:AF).page=+e.p;route()},
   logout(){API.logout();ME=null;boot()},
   pw(){form('Đổi mật khẩu',[{k:'o',l:'Mật khẩu hiện tại',t:'password',r:1},{k:'n',l:'Mật khẩu mới (≥ 8 ký tự)',t:'password',r:1}],{},async d=>{await API.changePassword(d.o,d.n);toast('Đã đổi mật khẩu');ME=await API.me();route()},'Đổi mật khẩu')},
-  newu(){const f=[{k:'username',l:'Tên đăng nhập',r:1},{k:'password',l:'Mật khẩu tạm (≥ 8 ký tự)',t:'password',r:1},{k:'role',l:'Vai trò',t:'select',o:Object.entries(RL).filter(([k])=>ME.role==='SUPER_ADMIN'||k!=='SUPER_ADMIN')},...PROFILE_F,{k:'avatar',l:'Ảnh đại diện (JPG/PNG/WebP ≤2MB)',t:'file',a:IMG,r:1}];
+  newu(){const f=[{k:'username',l:'Tên đăng nhập',r:1,sec:'Tài khoản'},{k:'password',l:'Mật khẩu tạm (≥ 8 ký tự)',t:'password',r:1},{k:'role',l:'Vai trò',t:'select',o:Object.entries(RL).filter(([k])=>ME.role==='SUPER_ADMIN'||k!=='SUPER_ADMIN')},...PROFILE_F.map((x,i)=>i?x:{...x,sec:'Thông tin cá nhân'}),{k:'avatar',l:'Chọn ảnh (JPG/PNG/WebP ≤2MB)',t:'file',a:IMG,r:1,full:1,sec:'Ảnh đại diện'}];;
     form('Thêm người dùng',f,{gender:'Nam',nationality:'Việt Nam'},async d=>{const{avatar,kids,...x}=d;await API.createUser(x,avatar,kids);toast('Đã tạo. Người dùng phải đổi mật khẩu khi đăng nhập lần đầu.');route()},'Tạo',kidsHook())},
   editp(e){const mng=API.canManage(ME,VIEW.d.user);form('Sửa hồ sơ',[...(mng?PROFILE_F:CONTACT_F),{k:'avatar',l:'Ảnh đại diện mới (tuỳ chọn)',t:'file',a:IMG}],VIEW.d.profile,async d=>{const{avatar,...x}=d;await API.saveProfile(e.id,x,avatar);route()})},
   add(e){const c=CHILD[e.kind];form('Thêm '+c.t.toLowerCase(),c.f,{isCurrent:'true'},async d=>{const{file,...x}=d;await API.addChild(e.id,e.kind,x,file);route()},'Thêm')},
@@ -128,6 +148,10 @@ document.addEventListener('click',e=>{
   if(g){location.hash='/'+g.dataset.go;return}
   if(t){TAB=t.dataset.tab;route();return}
   if(a&&A[a.dataset.act])run(()=>A[a.dataset.act]({...a.dataset}))});
+document.addEventListener('click',e=>{const s=e.target.closest('details.more>summary');
+  document.querySelectorAll('details.more[open]').forEach(d=>{if(!d.contains(e.target)||e.target.closest('[data-act]'))d.open=false});
+  if(s){const r=s.getBoundingClientRect(),m=s.nextElementSibling;m.style.top=r.bottom+4+'px';m.style.right=innerWidth-r.right+'px'}});
+window.addEventListener('scroll',()=>document.querySelectorAll('details.more[open]').forEach(d=>d.open=false),true);
 async function route(){
   if(!ME)return loginView();if(ME.mustChangePassword)return forceChange();
   const[,page,id]=location.hash.split('/');
