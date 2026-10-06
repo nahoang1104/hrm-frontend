@@ -2,8 +2,13 @@
 <html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Quản lý nhân sự</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;700&display=swap">
-<link rel="stylesheet" href="css/style.css?v=5"></head>
+<link rel="stylesheet" href="css/style.css?v=6"></head>
 <body><div id="app"></div><div id="toast"></div>
-<script>window.HRM_CONFIG={mode:'local',prefix:'hrm_',seedUser:'admin',seedPassword:'Admin@12345'}; // mode: 'local' | 'kio'</script>
-<script src="js/api/store.js?v=5"></script><script src="js/api/hr-api.js?v=5"></script><script src="js/app.js?v=5"></script>
+<script>
+// Mặc định lưu trên KIO (https://kio.dvqt.vn). Thêm ?driver=local để chạy cục bộ bằng IndexedDB, không đụng KIO.
+window.HRM_CONFIG={mode:new URLSearchParams(location.search).get('driver')==='local'?'local':'kio',prefix:'hrm_',seedUser:'admin',seedPassword:'Admin@12345'};
+</script>
+<script src="https://kio.dvqt.vn/list.js"></script>
+<script src="https://kio.dvqt.vn/krud.js"></script>
+<script src="js/api/kio-api.js?v=6"></script><script src="js/api/store.js?v=6"></script><script src="js/api/hr-api.js?v=6"></script><script src="js/app.js?v=6"></script>
 </body></html>

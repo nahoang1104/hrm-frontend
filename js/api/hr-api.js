@@ -9,7 +9,7 @@ const API=(()=>{
   async function hash(pw,salt=crypto.getRandomValues(new Uint8Array(16))){
     const k=await crypto.subtle.importKey('raw',new TextEncoder().encode(pw),'PBKDF2',false,['deriveBits']);
     return b64(salt)+'$'+b64(await crypto.subtle.deriveBits({name:'PBKDF2',hash:'SHA-256',salt,iterations:150000},k,256))}
-  const check=async(pw,s)=>(await hash(pw,unb(s.split('$')[0])))===s;
+  const check=async(pw,s)=>{try{return(await hash(pw,unb(String(s).split('$')[0])))===s}catch(_){return false}}; // hash lạ (vd. Argon2 từ bản cũ) => sai mật khẩu, không văng lỗi
   const pub=({passwordHash,...u})=>u;
   const log=(userId,action,targetUserId,description)=>S.append(T.a,{id:uid('al_'),userId,action,targetUserId,description,createdAt:now()});
   const norm=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/đ/g,'d');
@@ -69,7 +69,7 @@ const API=(()=>{
     async login(name,pw){
       await seed();const k=name.trim().toLowerCase(),f=API._f[k]||{n:0,until:0};
       if(f.until>Date.now())E('Tạm khóa 15 phút do nhập sai quá 5 lần');
-      const u=(await S.list(T.u)).find(x=>x.username.toLowerCase()===k);
+      const u=(await S.list(T.u,{force:true})).find(x=>x.username.toLowerCase()===k); // đọc mới nhất từ server khi đăng nhập
       if(!u||u.status!=='ACTIVE'||!(await check(pw,u.passwordHash))){if(++f.n>=5){f.until=Date.now()+9e5;f.n=0}API._f[k]=f;E('Sai tên đăng nhập hoặc mật khẩu, hoặc tài khoản không hoạt động')}
       delete API._f[k];sessionStorage.uid=u.id;u.lastLoginAt=now();await S.sync(T.u,[u]);await log(u.id,'LOGIN',u.id,'Đăng nhập: '+u.username);return pub(u)},
     logout(){sessionStorage.removeItem('uid')},

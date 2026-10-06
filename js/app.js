@@ -36,7 +36,7 @@ const run=async f=>{try{await f()}catch(x){toast(x.message)}};
 function shell(html){
   const nav=[['profile','Hồ sơ cá nhân',1],['users','Nhân sự',ME.role!=='EMPLOYEE'],['audit','Nhật ký',ME.role==='SUPER_ADMIN']].filter(n=>n[2]);
   const cur=location.hash.split('/')[1]||'profile';
-  $('#app').innerHTML=`<div class="shell"><nav><b>HRM</b>${nav.map(([k,l])=>`<a data-go="${k}" class="${cur===k?'on':''}">${l}</a>`).join('')}<div class="sp"></div><a data-act="dir">Thư mục uploads</a><a data-act="pw">Đổi mật khẩu</a><a data-act="logout">Đăng xuất (${esc(ME.username)})</a></nav><main>${html}</main></div>`;
+  $('#app').innerHTML=`<div class="shell"><nav><b>HRM</b>${nav.map(([k,l])=>`<a data-go="${k}" class="${cur===k?'on':''}">${l}</a>`).join('')}<div class="sp"></div><a data-act="dir">Thư mục uploads</a><a data-act="pw">Đổi mật khẩu</a><a data-act="logout">Đăng xuất (${esc(ME.username)})</a><small style="padding:6px 12px;color:#8fa3b8">Dữ liệu: ${Store.mode==='kio'?'KIO':'Local'}</small></nav><main>${html}</main></div>`;
   document.querySelectorAll('[data-fid]').forEach(async i=>{try{i.src=await API.fileUrl(i.dataset.fid)}catch{}})}
 
 function loginView(){$('#app').innerHTML=`<div class="card login"><h2>Đăng nhập</h2><form id="lf"><label>Tên đăng nhập<input name="u" required autofocus></label><label>Mật khẩu<input name="p" type="password" required></label><div class="err" id="le"></div><button class="pri" style="width:100%">Đăng nhập</button></form></div>`;
@@ -109,5 +109,7 @@ async function route(){
   const[,page,id]=location.hash.split('/');
   await run(async()=>{if(page==='users'&&id)await profileView(id);else if(page==='users')await usersView();else if(page==='audit')await auditView();else await profileView(ME.id)})}
 window.addEventListener('hashchange',()=>{TAB='profile';route()});
-async function boot(){await API.seed();ME=await API.me();route()}
+async function boot(){
+  try{await API.seed();ME=await API.me();route()}
+  catch(x){$('#app').innerHTML=`<div class="card login"><h2>Không kết nối được dữ liệu</h2><p>${esc(x.message)}</p><button class="pri" onclick="location.reload()">Thử lại</button></div>`}}
 boot();
