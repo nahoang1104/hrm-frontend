@@ -1,22 +1,24 @@
 // UI + router + hành động (event delegation: data-go / data-tab / data-act). Chỉ gọi API.*
 const $=s=>document.querySelector(s),esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const RL={SUPER_ADMIN:'Quản trị tối cao',HR_MANAGER:'Quản lý nhân sự',EMPLOYEE:'Nhân viên'},ST={ACTIVE:'Hoạt động',LOCKED:'Đã khóa',DELETED:'Đã xóa'};
+const FAM_HIDE=['citizenID','address','email','phone'];
 const GENDER=[['Nam','Nam'],['Nữ','Nữ'],['Khác','Khác']],IMG='image/jpeg,image/png,image/webp',DOC=IMG+',application/pdf';
 const CHILD={
   positions:{t:'Chức vụ',f:[{k:'position',l:'Chức vụ',r:1},{k:'fromDate',l:'Từ ngày',t:'date',r:1},{k:'isCurrent',l:'Đang giữ',t:'select',o:[['true','Có'],['false','Không']]}],c:['position','fromDate','isCurrent']},
   work:{t:'Quá trình công tác',f:[{k:'company',l:'Công ty',r:1},{k:'department',l:'Phòng ban'},{k:'position',l:'Chức vụ',r:1},{k:'fromDate',l:'Từ ngày',t:'date',r:1},{k:'toDate',l:'Đến ngày',t:'date'},{k:'description',l:'Mô tả',t:'textarea'}],c:['company','department','position','fromDate','toDate']},
   degrees:{t:'Bằng cấp',f:[{k:'name',l:'Tên bằng',r:1},{k:'major',l:'Chuyên ngành'},{k:'school',l:'Trường'},{k:'issuedDate',l:'Ngày cấp',t:'date'},{k:'file',l:'File (JPG/PNG/WebP/PDF ≤5MB)',t:'file',a:DOC}],c:['name','major','school','issuedDate']},
   certificates:{t:'Chứng chỉ',f:[{k:'name',l:'Tên chứng chỉ',r:1},{k:'issuer',l:'Nơi cấp'},{k:'certificateNumber',l:'Số hiệu'},{k:'issuedDate',l:'Ngày cấp',t:'date'},{k:'expiredDate',l:'Hết hạn',t:'date'},{k:'file',l:'File (JPG/PNG/WebP/PDF ≤5MB)',t:'file',a:DOC}],c:['name','issuer','certificateNumber','issuedDate','expiredDate']}};
+const FAM_F=[{k:'relation',l:'Mối quan hệ',r:1,dl:['Cha','Mẹ','Vợ','Chồng','Con','Anh','Chị','Em','Ông','Bà','Cháu','Chú','Bác','Cô','Dì','Cậu','Người thân']},{k:'fullName',l:'Họ tên',r:1},{k:'dateOfBirth',l:'Ngày sinh',t:'date'},{k:'gender',l:'Giới tính',t:'select',o:[['','—'],...GENDER]},{k:'nationality',l:'Quốc tịch'},{k:'citizenID',l:'CCCD',n:1},{k:'address',l:'Địa chỉ'},{k:'email',l:'Email',t:'email'},{k:'phone',l:'Điện thoại',n:1}];
 const PROFILE_F=[{k:'fullName',l:'Họ tên',r:1},{k:'gender',l:'Giới tính',t:'select',o:GENDER},{k:'nationality',l:'Quốc tịch',r:1},{k:'dateOfBirth',l:'Ngày sinh',t:'date',r:1},{k:'citizenID',l:'CCCD',r:1,n:1},{k:'phone',l:'Điện thoại',r:1,n:1},{k:'email',l:'Email',t:'email',r:1},{k:'address',l:'Địa chỉ'}];
 const CONTACT_F=PROFILE_F.filter(f=>['phone','email','address'].includes(f.k));
 let ME=null,TAB='profile',FILTER={q:'',role:'',status:'',page:1},AF={q:'',action:'',from:'',to:'',page:1};
 const pager=(r,w)=>`<div class="bar"><span style="color:var(--mut)">Hiển thị dòng ${r.items.length?(r.page-1)*r.pageSize+1:0} - ${(r.page-1)*r.pageSize+r.items.length} · Trang <input class="pgin" type="number" min="1" value="${r.page}" data-pgin="${w}" title="Nhập số trang rồi nhấn Enter"></span><div class="sp"></div>${[['« Đầu',1],['Trước',r.page-1],['Sau',r.page+1],['Cuối »',r.pages]].map(([l,n],i)=>`<button class="sm" data-act="pg" data-w="${w}" data-p="${n}" ${(i<2?r.page<=1:r.page>=r.pages)?'disabled':''}>${l}</button>`).join('')}</div>`;
 
 function toast(m){const t=$('#toast');t.textContent=m;t.style.display='block';clearTimeout(toast.h);toast.h=setTimeout(()=>t.style.display='none',3500)}
-const fld=(f,vals,pre='')=>`<label>${esc(f.l)}${f.r?' *':''}${f.t==='select'?`<select name="${pre}${f.k}">${f.o.map(([v,t])=>`<option value="${esc(v)}" ${String(vals[f.k])===v?'selected':''}>${esc(t)}</option>`).join('')}</select>`:f.t==='textarea'?`<textarea name="${pre}${f.k}">${esc(vals[f.k])}</textarea>`:`<input name="${pre}${f.k}" type="${f.t||'text'}" ${f.r?'required':''} ${f.a?`accept="${f.a}"`:''} ${f.n?'inputmode="numeric" pattern="[0-9]+" title="Chỉ nhập chữ số"':''} ${f.t==='date'&&API.maxDate(f.k)?`max="${API.maxDate(f.k)}"`:''} ${f.t==='file'?'':`value="${esc(vals[f.k])}"`}>`}</label>`;
+const fld=(f,vals,pre='')=>`<label>${esc(f.l)}${f.r?' *':''}${f.t==='select'?`<select name="${pre}${f.k}">${f.o.map(([v,t])=>`<option value="${esc(v)}" ${String(vals[f.k])===v?'selected':''}>${esc(t)}</option>`).join('')}</select>`:f.t==='textarea'?`<textarea name="${pre}${f.k}">${esc(vals[f.k])}</textarea>`:`<input name="${pre}${f.k}" type="${f.t||'text'}" ${f.r?'required':''} ${f.a?`accept="${f.a}"`:''} ${f.n?'inputmode="numeric" pattern="[0-9]+" title="Chỉ nhập chữ số"':''} ${f.t==='date'&&API.maxDate(f.k)?`max="${API.maxDate(f.k)}"`:''} ${f.t==='file'?'':`value="${esc(vals[f.k])}"`}${f.dl?` list="dl-${pre}${f.k}"`:''}>${f.dl?`<datalist id="dl-${pre}${f.k}">${f.dl.map(x=>`<option value="${x}">`).join('')}</datalist>`:''}`}</label>`;
 function form(title,fields,vals,submit,ok='Lưu',hook){
   const d=document.createElement('dialog');
-  d.innerHTML=`<form><h3>${esc(title)}</h3>${fields.map(f=>fld(f,vals)).join('')}${hook?hook.html:''}<div class="err"></div><div class="row"><button type="button" data-x>Hủy</button><button class="pri">${ok}</button></div></form>`;
+  d.innerHTML=`<form><h3>${esc(title)}</h3>${hook&&hook.top||''}${fields.map(f=>fld(f,vals)).join('')}${hook&&hook.html||''}<div class="err"></div><div class="row"><button type="button" data-x>Hủy</button><button class="pri">${ok}</button></div></form>`;
   document.body.append(d);d.showModal();d.querySelector('[data-x]').onclick=()=>d.close();d.onclose=()=>d.remove();if(hook)hook.init(d);
   d.querySelector('form').onsubmit=async e=>{e.preventDefault();const data={};for(const f of fields){const el=e.target.elements[f.k];data[f.k]=f.t==='file'?el.files[0]:el.value}
     if(hook)hook.collect(e.target,data);
@@ -46,12 +48,27 @@ function forceChange(){$('#app').innerHTML='<div class="card login"><h2>Đổi m
 const kv=(p,keys)=>`<div class="kv">${keys.map(([k,l])=>`<span>${l}</span><span>${esc(p[k])||'—'}</span>`).join('')}</div>`;
 async function profileView(id){
   const d=await API.getUser(id),u=d.user,p=d.profile,mng=API.canManage(ME,u),self=ME.id===id,editC=k=>k==='positions'||k==='work'?mng:(mng||self);
-  const tabs=[['profile','Hồ sơ'],...Object.entries(CHILD).map(([k,c])=>[k,c.t])];if(!tabs.some(t=>t[0]===TAB))TAB='profile';
+  const tabs=[['profile','Hồ sơ'],...Object.entries(CHILD).map(([k,c])=>[k,c.t]),['family','Gia phả']];if(!tabs.some(t=>t[0]===TAB))TAB='profile';
   let body;
   if(TAB==='profile')body=`<img class="ava" data-fid="${esc(p.profilePictureFileId)}" alt="">${kv(p,PROFILE_F.map(f=>[f.k,f.l]))}<div class="kv"><span>Tên đăng nhập</span><span>${esc(u.username)}</span><span>Vai trò</span><span>${RL[u.role]}</span><span>Trạng thái</span><span><span class="tag ${u.status}">${ST[u.status]}</span></span></div><div class="row" style="justify-content:flex-start">${mng||self?`<button data-act="editp" data-id="${id}">Sửa hồ sơ</button>`:''}</div>`;
+  else if(TAB==='family')body=famBody(d,id,editC('family'));
   else{const c=CHILD[TAB],rows=d[TAB];body=`${editC(TAB)?`<div class="bar"><div class="sp"></div><button class="pri" data-act="add" data-id="${id}" data-kind="${TAB}">Thêm ${c.t.toLowerCase()}</button></div>`:''}<table><tr>${c.f.filter(f=>f.t!=='file'&&c.c.includes(f.k)).map(f=>`<th>${f.l}</th>`).join('')}<th></th></tr>${rows.map(r=>`<tr>${c.f.filter(f=>f.t!=='file'&&c.c.includes(f.k)).map(f=>`<td>${esc(f.k==='isCurrent'?(String(r[f.k])==='true'?'Có':'Không'):r[f.k])}</td>`).join('')}<td>${r.fileId?`<button class="sm" data-act="open" data-id="${r.fileId}">Xem file</button> `:''}${TAB==='work'?`<button class="sm" data-act="view" data-id="${r.id}" data-kind="${TAB}" data-uid="${id}">Chi tiết</button> `:''}${editC(TAB)?`<button class="sm" data-act="editc" data-id="${id}" data-kind="${TAB}" data-rid="${r.id}">Sửa</button> <button class="sm bad" data-act="delc" data-id="${id}" data-kind="${TAB}" data-rid="${r.id}">Xóa</button>`:''}</td></tr>`).join('')||`<tr><td colspan="9">Chưa có dữ liệu.</td></tr>`}</table>`}
   VIEW={d};shell(`<h2>${esc(p.fullName||u.username)}</h2><div class="tabs">${tabs.map(([k,l])=>`<a data-tab="${k}" data-id="${id}" class="${TAB===k?'on':''}">${l}</a>`).join('')}</div><div class="card">${body}</div>`)}
 let VIEW={};
+const famBody=(d,id,canEdit)=>`${canEdit?`<div class="bar"><div class="sp"></div><button class="pri" data-act="addf" data-id="${id}">Thêm người thân</button></div>`:''}<table><tr><th>Họ tên</th><th>Mối quan hệ</th><th></th></tr>${d.family.map(r=>`<tr><td>${esc(r.fullName)}${r.linked?' <span class="tag">Nhân sự</span>':''}</td><td>${esc(r.relation)}</td><td><button class="sm" data-act="viewf" data-rid="${r.id}">Xem chi tiết</button>${r.canOpen?` <button class="sm" data-go="users/${r.linkedUserId}">Xem hồ sơ</button>`:''}${canEdit?` <button class="sm" data-act="editf" data-id="${id}" data-rid="${r.id}">Sửa</button> <button class="sm bad" data-act="delf" data-id="${id}" data-rid="${r.id}">Xóa</button>`:''}</td></tr>`).join('')||'<tr><td colspan="3">Chưa có dữ liệu.</td></tr>'}</table>`;
+// Khối tìm nhân sự để điền sẵn khi thêm người thân
+function famHook(ownerId){let linkId=null;const HIDE=()=>FAM_HIDE;return{
+  top:`<div class="card" style="padding:10px"><p style="margin:0 0 8px;color:var(--mut)">Nếu chọn một nhân sự, hệ thống tự thêm bản ghi đối ứng vào gia phả của họ (ví dụ bạn chọn họ là Cha thì bên họ ghi bạn là Con).</p><label>Tìm nhân sự để điền sẵn (đúng họ tên đầy đủ hoặc số CCCD)<div class="bar" style="margin:3px 0 0"><input id="fq" placeholder="Nhập họ tên đầy đủ hoặc CCCD"><button type="button" id="fgo">Tìm</button></div></label><div id="fres"></div></div>`,
+  init(d){const frm=d.querySelector('form'),res=d.querySelector('#fres'),set=(k,v,dis)=>{const el=frm.elements[k];if(!el)return;el.value=v||'';el.disabled=!!dis;el.placeholder=dis?'Ẩn (chỉ quản lý được xem)':''};
+    const unpick=()=>{linkId=null;FAM_F.forEach(f=>{if(f.k!=='relation')set(f.k,'',false)});res.innerHTML=''};
+    const search=async()=>{try{const L=await API.searchPeople(frm.elements.fq.value,ownerId);
+      res.innerHTML=L.length?L.map((r,i)=>`<div class="bar" style="margin:6px 0 0"><span>${esc(r.fullName)}${r.dateOfBirth?' · '+esc(r.dateOfBirth):''}${r.citizenID?' · '+esc(r.citizenID):''}</span><div class="sp"></div><button type="button" class="sm" data-pick="${i}">Chọn</button></div>`).join(''):'<p style="color:var(--mut)">Không có nhân sự khớp. Bạn có thể tự điền tay bên dưới.</p>';
+      res.onclick=e=>{const b=e.target.closest('[data-pick]');if(b){const r=L[+b.dataset.pick];linkId=r.userId;
+        FAM_F.forEach(f=>{if(f.k!=='relation')set(f.k,r[f.k],r.restricted&&FAM_HIDE.includes(f.k))});
+        res.innerHTML=`<p>Đã chọn: <b>${esc(r.fullName)}</b>. Sửa thông tin khác ngoài Mối quan hệ sẽ chuyển thành bản nhập tay. <button type="button" class="sm" data-unpick>Bỏ chọn</button></p>`;
+        res.onclick=e=>{if(e.target.closest('[data-unpick]'))unpick()}}}}catch(x){res.innerHTML=`<div class="err">${esc(x.message)}</div>`}};
+    d.querySelector('#fgo').onclick=search;frm.elements.fq.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();search()}}},
+  collect(frm,data){data.linkId=linkId}}}
 
 async function usersView(){
   const res=await API.listUsers(FILTER),rows=res.items,sa=ME.role==='SUPER_ADMIN';
@@ -86,6 +103,13 @@ const A={
     d.innerHTML=`<h3>Chi tiết ${c.t.toLowerCase()}</h3>${kv(r,c.f.filter(f=>f.t!=='file').map(f=>[f.k,f.l]))}<div class="row"><button>Đóng</button></div>`;document.body.append(d);d.showModal();d.onclose=()=>d.remove();d.querySelector('button').onclick=()=>d.close()},
   editc(e){const c=CHILD[e.kind],r=VIEW.d[e.kind].find(x=>x.id===e.rid);
     form('Sửa '+c.t.toLowerCase(),c.f.map(f=>f.t==='file'?{...f,l:f.l.replace(/^File/,'File mới, để trống để giữ file cũ')}:f),r,async d=>{const{file,...x}=d;await API.updateChild(e.id,e.kind,e.rid,x,file);route()})},
+  addf(e){form('Thêm người thân',FAM_F,{},async d=>{const{linkId,...x}=d;await API.addFamily(e.id,x,linkId);route()},'Thêm',famHook(e.id))},
+  editf(e){const r=VIEW.d.family.find(x=>x.id===e.rid),hide=r.linked&&r.restricted;
+    form('Sửa người thân',FAM_F.filter(f=>!(hide&&FAM_HIDE.includes(f.k))),r,async d=>{await API.updateFamily(e.id,e.rid,d);route()},'Lưu',r.linked?{top:'<p style="color:var(--mut)">Người thân là nhân sự trong hệ thống. Sửa thông tin khác ngoài "Mối quan hệ" sẽ chuyển thành bản nhập tay (không còn đồng bộ với hồ sơ nhân sự).</p>',init(){},collect(){}}:undefined)},
+  viewf(e){const r=VIEW.d.family.find(x=>x.id===e.rid),d=document.createElement('dialog');
+    d.innerHTML=`<h3>Chi tiết người thân</h3><div class="kv"><span>Mối quan hệ</span><span>${esc(r.relation)}</span>${FAM_F.filter(f=>f.k!=='relation').map(f=>`<span>${f.l}</span><span>${r.linked&&r.restricted&&FAM_HIDE.includes(f.k)?'<i style="color:var(--mut)">Ẩn (chỉ quản lý được xem)</i>':esc(r[f.k])||'—'}</span>`).join('')}</div>${r.linked?`<p style="color:var(--mut)">Thông tin lấy từ hồ sơ nhân sự và tự cập nhật khi hồ sơ thay đổi.</p>`:''}<div class="row"><button>Đóng</button></div>`;
+    document.body.append(d);d.showModal();d.onclose=()=>d.remove();d.querySelector('button').onclick=()=>d.close()},
+  async delf(e){if(confirm('Xóa người thân này?')){await API.delFamily(e.id,e.rid);route()}},
   async delc(e){if(confirm('Xóa bản ghi này?')){await API.delChild(e.id,e.kind,e.rid);route()}},
   async open(e){window.open(await API.fileUrl(e.id),'_blank')},
   async lock(e){await API.setStatus(e.id,e.s);route()},
