@@ -208,3 +208,34 @@ td[data-l]>*:nth-child(n+2){grid-column:2}
 .thsort:hover{background:none;color:var(--primary)}.thsort.on{color:var(--primary)}
 .thsort i{font-size:11px;opacity:.45}.thsort.on i,.thsort:hover i{opacity:1}
 .thsort:focus-visible{outline:2px solid var(--primary);outline-offset:3px}
+
+/* ---- v26: hồ sơ gọn hơn — tóm tắt đầu trang, hai thẻ Thông tin cá nhân / Liên hệ, trang chỉ xem một thẻ ---- */
+.facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px 20px;flex-basis:100%;margin-top:4px;padding-top:16px;border-top:1px solid var(--border)}
+.fact small{display:block;margin-bottom:2px;color:var(--mut);font-size:12px;font-weight:600}
+.fact b{font-weight:600;overflow-wrap:anywhere}.fact .tag{margin-left:4px;vertical-align:1px}
+.pgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-bottom:16px}
+.pgrid .card{margin-bottom:0}.pgrid .kv{grid-template-columns:130px minmax(0,1fr);margin-bottom:0}
+.card h3 i{margin-right:8px;color:var(--text-3);font-size:14px}
+@media(max-width:900px){.pgrid{grid-template-columns:1fr}}
+@media(max-width:700px){.pgrid .kv{grid-template-columns:1fr;gap:2px 0}.pgrid .kv span:nth-child(even){margin-bottom:8px}}
+
+/* ---- v27: dòng thời gian (Chức vụ, Công tác), thẻ Bằng cấp / Chứng chỉ ---- */
+.sechd{display:flex;align-items:center;gap:10px;margin-bottom:12px}.sechd h3{margin:0}.sechd .sp,.tl-top .sp{flex:1}
+.none{margin:0;padding:6px 0;color:var(--mut)}
+
+/* ---- v28: dòng thời gian nằm ngang (Chức vụ, Công tác) ---- */
+.tl{list-style:none;margin:0;padding:2px 2px 12px;display:flex;overflow-x:auto;scroll-snap-type:x proximity;outline-offset:2px}
+.tl-item{position:relative;display:flex;flex-direction:column;flex:1 0 280px;max-width:460px;padding-right:16px;scroll-snap-align:start}
+.tl-date{margin-bottom:8px;font-size:15px;font-weight:700;color:var(--text-2)}.tl-item.cur .tl-date{color:var(--green)}
+.tl-rail{position:relative;height:14px;margin-bottom:12px}
+.tl-rail::before{content:'';position:absolute;left:0;right:0;top:6px;height:2px;background:var(--border-2)}
+.tl-item:last-child .tl-rail::before{right:auto;width:7px}
+.tl-dot{position:absolute;left:0;top:0;width:14px;height:14px;border-radius:50%;background:var(--surface);border:3px solid var(--border-2)}
+.tl-item.cur .tl-dot{border-color:var(--green);background:var(--green-soft)}
+.tl-card{flex:1;padding:12px 14px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface-2)}
+.tl-item.cur .tl-card{border-color:var(--green);background:var(--green-soft)}
+.tl-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.tl-top b{font-size:15px;font-weight:600}
+.tl-sub{margin-top:3px;color:var(--text-2)}.tl-when{margin-top:3px;color:var(--mut);font-size:13px}
+.tl-desc{margin:8px 0 0;color:var(--text-2);white-space:pre-wrap;overflow-wrap:anywhere}
+.tl-acts{display:flex;gap:6px;margin-top:10px}
+.tl-nav{display:inline-flex;gap:6px}.tl-nav[hidden]{display:none}

@@ -54,7 +54,7 @@ const API=(()=>{
   const dropFile=async id=>{if(!id)return;const f=(await S.list(T.f)).find(x=>x.id===id);if(f)await S.delFile(f.path);await S.del(T.f,[id])};
   const LB={relation:'Mối quan hệ',fullName:'Họ tên',gender:'Giới tính',nationality:'Quốc tịch',dateOfBirth:'Ngày sinh',citizenID:'CCCD',phone:'Điện thoại',email:'Email',position:'Chức vụ',fromDate:'Từ ngày',company:'Công ty',name:'Tên'};
   const need_=(d,keys)=>{for(const k of keys)if(!String(d[k]||'').trim())E('Thiếu trường bắt buộc: '+(LB[k]||k))};
-  const FUTURE_OK=[]; // khóa ngày được phép ở tương lai, ví dụ ['expiredDate']
+  const FUTURE_OK=['expiredDate']; // khóa ngày được phép ở tương lai (ngày hết hạn chứng chỉ)
   const DL={dateOfBirth:'Ngày sinh',fromDate:'Từ ngày',toDate:'Đến ngày',issuedDate:'Ngày cấp',expiredDate:'Ngày hết hạn'};
   const today=()=>new Date(Date.now()-new Date().getTimezoneOffset()*6e4).toISOString().slice(0,10);
   function chkDates(d){
@@ -121,9 +121,14 @@ const API=(()=>{
     if(await findMirror(ownerId,row))return false;
     await S.sync(T.fam,[{id:uid('fm_'),userId:row.linkedUserId,relation:inverseRel(row.relation,await ownerGender(ownerId)),linkedUserId:ownerId,auto:true}]);return true}
   const famName=async r=>r.linkedUserId?((await S.list(T.p)).find(p=>p.userId===r.linkedUserId)||{}).fullName||'':r.fullName;
-  async function limitedView(t){const p=(await S.list(T.p)).find(x=>x.userId===t.id)||{},cp=await S.list(KIND.positions);
+  async function limitedView(t){const p=(await S.list(T.p)).find(x=>x.userId===t.id)||{},cp=await S.list(KIND.positions),
+      kid=async(k,f)=>(await S.list(KIND[k])).filter(x=>x.userId===t.id).map(r=>pick(r,f)); // cấp trên: chỉ các cột hiển thị, không file đính kèm, không mô tả
+    const byFrom=(a,b)=>String(b.fromDate).localeCompare(String(a.fromDate));
     return{limited:true,user:{id:t.id,role:t.role},profile:{...pick(p,LIM),profilePictureFileId:p.profilePictureFileId||''},position:curPos(cp,t.id),
-      positions:cp.filter(x=>x.userId===t.id).map(({position,fromDate,isCurrent})=>({position,fromDate,isCurrent})).sort((a,b)=>String(b.fromDate).localeCompare(String(a.fromDate)))}}
+      positions:cp.filter(x=>x.userId===t.id).map(({position,fromDate,isCurrent})=>({position,fromDate,isCurrent})).sort(byFrom),
+      work:(await kid('work',['company','department','position','fromDate','toDate'])).sort(byFrom),
+      degrees:await kid('degrees',['name','major','school','issuedDate']),
+      certificates:await kid('certificates',['name','issuer','certificateNumber','issuedDate','expiredDate'])}}
   const PF=['fullName','gender','nationality','dateOfBirth','citizenID','phone','email'],ID=['fullName','gender','nationality','dateOfBirth','citizenID'];
 
   return{
