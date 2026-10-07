@@ -23,6 +23,9 @@ const API=(()=>{
   async function need(){const m=await me();if(!m)E('Chưa đăng nhập');if(m.mustChangePassword)E('Cần đổi mật khẩu trước');return m}
   const canManage=(m,t)=>m.role==='SUPER_ADMIN'||(m.role==='HR_MANAGER'&&t.role==='EMPLOYEE');
   const canView=(m,t)=>m.id===t.id||m.role==='SUPER_ADMIN'||(m.role==='HR_MANAGER'&&t.role!=='SUPER_ADMIN'&&t.status!=='DELETED');
+  const RANK={EMPLOYEE:1,HR_MANAGER:2,SUPER_ADMIN:3},LIM=['fullName','gender','nationality','dateOfBirth'];
+  const canLimited=(m,t)=>RANK[t.role]>RANK[m.role]&&t.status!=='DELETED'; // t là cấp trên của m: chỉ xem thông tin cơ bản
+  const curPos=(cp,id)=>{const r=cp.filter(x=>x.userId===id&&String(x.isCurrent)==='true').sort((a,b)=>String(b.fromDate).localeCompare(String(a.fromDate)))[0];return r?r.position:''};
   async function target(id,mode){ // mode: view | manage | self (quản lý hoặc chính mình)
     const m=await need(),t=(await S.list(T.u)).find(x=>x.id===id);if(!t)E('Không tìm thấy người dùng');
     const ok=mode==='view'?canView(m,t):mode==='manage'?canManage(m,t):(canManage(m,t)||m.id===t.id);
@@ -62,6 +65,15 @@ const API=(()=>{
   const ld=s=>{const d=new Date(s);return new Date(d-d.getTimezoneOffset()*6e4).toISOString().slice(0,10)}; // ngày theo giờ máy
   const PAGE=25;
   const paged=(all,page)=>{const pages=Math.max(1,Math.ceil(all.length/PAGE)),p=Math.min(Math.max(1,+page||1),pages);return{items:all.slice((p-1)*PAGE,p*PAGE),total:all.length,page:p,pages,pageSize:PAGE}};
+  // Sắp xếp danh sách nhân sự (làm ở API vì có phân trang). Mặc định: Vai trò (cấp cao trước) rồi tên.
+  // Tên sắp theo TÊN GỌI (từ cuối họ tên) rồi tới cả họ tên, theo thứ tự tiếng Việt. Dòng rỗng (vd. cột Trạng thái/Liên hệ của cấp trên) luôn xuống cuối.
+  const vi=(a,b)=>String(a).localeCompare(String(b),'vi',{sensitivity:'base'}),given=n=>String(n||'').trim().split(/\s+/).pop(),STO={ACTIVE:0,LOCKED:1,DELETED:2};
+  const byName=(a,b)=>vi(given(a.fullName),given(b.fullName))||vi(a.fullName||'',b.fullName||'');
+  const SORTS={role:(a,b)=>RANK[b.role]-RANK[a.role],name:byName,
+    status:(a,b)=>STO[a.status]-STO[b.status],contact:(a,b)=>vi(a.phone||'',b.phone||'')||vi(a.email||'',b.email||'')};
+  const SORT_EMPTY={status:r=>r.limited,contact:r=>r.limited};
+  const sortUsers=(rows,key,dir)=>{const f=SORTS[key]||SORTS.role,k=SORTS[key]?key:'role',sg=dir==='desc'?-1:1,emp=SORT_EMPTY[k]||(()=>false);
+    return[...rows].sort((a,b)=>{const ea=emp(a),eb=emp(b);if(ea!==eb)return ea?1:-1;return(ea?0:sg*f(a,b))||byName(a,b)||vi(a.id,b.id)})};
   // CCCD là duy nhất toàn hệ thống. Bảng KIO chỉ có id + payload nên không đặt được unique index => chặn ở tầng ứng dụng (đọc mới nhất từ server, không dùng cache).
   const cid=v=>String(v??'').trim();
   const dupCCCD=async(v,exceptUser)=>{v=cid(v);return v&&(await S.list(T.p,{force:true})).some(p=>p.userId!==exceptUser&&cid(p.citizenID)===v)};
@@ -73,15 +85,16 @@ const API=(()=>{
   const isMgr=m=>m.role!=='EMPLOYEE';
   const pick=(o,ks)=>Object.fromEntries(ks.map(k=>[k,String(o[k]??'').trim()]));
   // Bản ghi liên kết chỉ lưu {relation, linkedUserId}; thông tin lấy trực tiếp từ hồ sơ nhân sự nên luôn là bản mới nhất.
-  function famView(m,r,users,ps){
+  function famView(m,r,users,ps,cp){
     const t=r.linkedUserId&&users.find(u=>u.id===r.linkedUserId);
     if(!t)return{...r,linked:false};
-    const full=isMgr(m)&&canView(m,t),p=ps.find(x=>x.userId===t.id)||{};
-    return{id:r.id,userId:r.userId,relation:r.relation,linked:true,restricted:!full,canOpen:full,...(full?{linkedUserId:t.id}:{}),
+    const full=isMgr(m)&&canView(m,t),show=full||canLimited(m,t),p=ps.find(x=>x.userId===t.id)||{};
+    return{id:r.id,userId:r.userId,relation:r.relation,linked:true,restricted:!full,canOpen:show,
+      ...(show?{linkedUserId:t.id,profilePictureFileId:p.profilePictureFileId||'',position:curPos(cp,t.id)}:{}),
       ...Object.fromEntries(FAM.map(k=>[k,full||!FAM_HIDE.includes(k)?String(p[k]??'').trim():'']))}}
   async function famTarget(m,owner,linkId,existing){
     const t=(await S.list(T.u)).find(u=>u.id===linkId);if(!t)E('Không tìm thấy nhân sự được chọn');
-    if(!existing&&(t.id===owner||t.status==='DELETED'||(t.role==='SUPER_ADMIN'&&m.role!=='SUPER_ADMIN')))E('Không thể chọn nhân sự này làm người thân');
+    if(!existing&&(t.id===owner||t.status==='DELETED'))E('Không thể chọn nhân sự này làm người thân');
     return{p:(await S.list(T.p)).find(p=>p.userId===t.id)||{},full:isMgr(m)&&canView(m,t)}}
   // Còn liên kết chỉ khi mọi thông tin người dùng nhìn thấy giữ nguyên như hồ sơ nhân sự (trừ Quan hệ); sửa gì khác => thành bản nhập tay.
   async function famBuild(m,owner,d,linkId,existing){
@@ -108,6 +121,9 @@ const API=(()=>{
     if(await findMirror(ownerId,row))return false;
     await S.sync(T.fam,[{id:uid('fm_'),userId:row.linkedUserId,relation:inverseRel(row.relation,await ownerGender(ownerId)),linkedUserId:ownerId,auto:true}]);return true}
   const famName=async r=>r.linkedUserId?((await S.list(T.p)).find(p=>p.userId===r.linkedUserId)||{}).fullName||'':r.fullName;
+  async function limitedView(t){const p=(await S.list(T.p)).find(x=>x.userId===t.id)||{},cp=await S.list(KIND.positions);
+    return{limited:true,user:{id:t.id,role:t.role},profile:{...pick(p,LIM),profilePictureFileId:p.profilePictureFileId||''},position:curPos(cp,t.id),
+      positions:cp.filter(x=>x.userId===t.id).map(({position,fromDate,isCurrent})=>({position,fromDate,isCurrent})).sort((a,b)=>String(b.fromDate).localeCompare(String(a.fromDate)))}}
   const PF=['fullName','gender','nationality','dateOfBirth','citizenID','phone','email'],ID=['fullName','gender','nationality','dateOfBirth','citizenID'];
 
   return{
@@ -123,14 +139,17 @@ const API=(()=>{
       const m=await me();if(!m)E('Chưa đăng nhập');if(!(await check(oldPw,m.passwordHash)))E('Mật khẩu hiện tại không đúng');
       if(newPw.length<8)E('Mật khẩu mới tối thiểu 8 ký tự');if(newPw===oldPw)E('Mật khẩu mới phải khác mật khẩu cũ');
       Object.assign(m,{passwordHash:await hash(newPw),mustChangePassword:false,updatedAt:now()});await S.sync(T.u,[m]);await log(m.id,'CHANGE_PASSWORD',m.id,'Đổi mật khẩu: '+m.username)},
-    async listUsers({q='',role='',status='',page=1}={}){
+    async listUsers({q='',role='',status='',page=1,sort='role',dir='asc',fresh=false}={}){
       const m=await need();if(m.role==='EMPLOYEE')E('Bạn không có quyền xem danh sách');
-      const ps=await S.list(T.p),Q=norm(q);
-      return paged((await S.list(T.u)).filter(u=>canView(m,u)&&(!role||u.role===role)&&(!status||u.status===status)).map(u=>({...pub(u),...(ps.find(p=>p.userId===u.id)||{}),id:u.id}))
-        .filter(r=>!Q||norm([r.fullName,r.username,r.email,r.phone,r.citizenID].join(' ')).includes(Q)),page)},
+      const o=fresh?{force:true}:undefined,ps=await S.list(T.p,o),cp=await S.list(KIND.positions,o),Q=norm(q); // fresh: bỏ cache, đọc lại toàn bộ bản ghi từ DB (dùng khi bấm sắp xếp)
+      return paged(sortUsers((await S.list(T.u,o)).filter(u=>(canView(m,u)||canLimited(m,u))&&(!role||u.role===role))
+        .map(u=>{const p=ps.find(x=>x.userId===u.id)||{};return canView(m,u)?{...pub(u),...p,id:u.id}:{limited:true,id:u.id,role:u.role,...pick(p,LIM),profilePictureFileId:p.profilePictureFileId||'',position:curPos(cp,u.id)}})
+        .filter(r=>(!status||(!r.limited&&r.status===status))&&(!Q||norm((r.limited?[r.fullName]:[r.fullName,r.username,r.email,r.phone,r.citizenID]).join(' ')).includes(Q))),sort,dir),page)},
     async getUser(id){
-      const{m,t}=await target(id,'view'),us=await S.list(T.u),ps=await S.list(T.p),by=async k=>(await S.list(KIND[k])).filter(x=>x.userId===id);
-      return{user:pub(t),profile:(await S.list(T.p)).find(p=>p.userId===id)||{},positions:await by('positions'),work:await by('work'),degrees:await by('degrees'),certificates:await by('certificates'),family:(await S.list(T.fam)).filter(x=>x.userId===id).map(r=>famView(m,r,us,ps))}},
+      const m0=await need(),t0=(await S.list(T.u)).find(x=>x.id===id);
+      if(t0&&!canView(m0,t0)&&canLimited(m0,t0))return limitedView(t0); // cấp trên: chỉ trả thông tin cơ bản
+      const{m,t}=await target(id,'view'),us=await S.list(T.u),ps=await S.list(T.p),cp=await S.list(KIND.positions),by=async k=>(await S.list(KIND[k])).filter(x=>x.userId===id);
+      return{user:pub(t),profile:(await S.list(T.p)).find(p=>p.userId===id)||{},positions:await by('positions'),work:await by('work'),degrees:await by('degrees'),certificates:await by('certificates'),family:(await S.list(T.fam)).filter(x=>x.userId===id).map(r=>famView(m,r,us,ps,cp))}},
     async createUser(d,avatar,kids={}){
       const m=await need();if(m.role==='EMPLOYEE')E('Bạn không có quyền tạo người dùng');
       if(m.role==='HR_MANAGER'&&d.role==='SUPER_ADMIN')E('Quản lý nhân sự không được tạo SUPER_ADMIN');
@@ -204,8 +223,8 @@ const API=(()=>{
     async searchPeople(q,ownerId){ // khớp đúng họ tên đầy đủ (không phân biệt hoa/thường/dấu) hoặc đúng số CCCD
       const m=await need(),s=String(q||'').trim();if(!s)return[];
       const ps=await S.list(T.p),Q=norm(s),num=/^\d+$/.test(s);
-      return(await S.list(T.u)).filter(u=>u.id!==ownerId&&u.status!=='DELETED'&&(m.role==='SUPER_ADMIN'||u.role!=='SUPER_ADMIN'))
-        .map(u=>({u,p:ps.find(p=>p.userId===u.id)||{}})).filter(({p})=>num?String(p.citizenID||'').trim()===s:norm(p.fullName)===Q).slice(0,10)
+      return(await S.list(T.u)).filter(u=>u.id!==ownerId&&u.status!=='DELETED')
+        .map(u=>({u,p:ps.find(p=>p.userId===u.id)||{}})).filter(({u,p})=>num?(!canLimited(m,u)&&String(p.citizenID||'').trim()===s):norm(p.fullName)===Q).slice(0,10)
         .map(({u,p})=>{const full=isMgr(m)&&canView(m,u);return{userId:u.id,restricted:!full,...pick(p,FAM.filter(k=>full||!FAM_HIDE.includes(k)))}})},
     async addFamily(id,d,linkId){const{m,t}=await target(id,'self'),row=await famBuild(m,id,d,linkId||null,false);
       Object.assign(row,{id:uid('fm_'),userId:id});await S.sync(T.fam,[row]);
@@ -228,7 +247,8 @@ const API=(()=>{
       await dropFile(row.fileId);await S.del(KIND[kind],[rid])},
     async fileUrl(fid){
       const m=await need(),f=(await S.list(T.f)).find(x=>x.id===fid);if(!f)E('Không tìm thấy file');
-      const o=(await S.list(T.u)).find(u=>u.id===f.ownerId);if(!o||!canView(m,o))E('Bạn không có quyền xem file');
+      const o=(await S.list(T.u)).find(u=>u.id===f.ownerId);if(!o)E('Bạn không có quyền xem file');
+      if(!canView(m,o)){const p=(await S.list(T.p)).find(x=>x.userId===o.id)||{};if(!(canLimited(m,o)&&f.type==='profile'&&p.profilePictureFileId===f.id))E('Bạn không có quyền xem file')} // cấp trên: chỉ ảnh đại diện
       const b=await S.getFile(f.path).catch(()=>null);if(!b)E('Không đọc được file '+f.path+' (chọn lại thư mục uploads)');return URL.createObjectURL(b)},
     async audit({q='',action='',from='',to='',page=1}={}){
       const m=await need();if(m.role!=='SUPER_ADMIN')E('Chỉ SUPER_ADMIN xem được nhật ký');
