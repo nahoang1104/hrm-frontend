@@ -11,7 +11,8 @@ const API=(()=>{
     return b64(salt)+'$'+b64(await crypto.subtle.deriveBits({name:'PBKDF2',hash:'SHA-256',salt,iterations:150000},k,256))}
   const check=async(pw,s)=>{try{return(await hash(pw,unb(String(s).split('$')[0])))===s}catch(_){return false}}; // hash lạ (vd. Argon2 từ bản cũ) => sai mật khẩu, không văng lỗi
   const pub=({passwordHash,...u})=>u;
-  const log=(userId,action,targetUserId,description)=>S.append(T.a,{id:uid('al_'),userId,action,targetUserId,description,createdAt:now()});
+  // Quy ước mô tả: người trong hệ thống (nhân sự) chỉ gọi bằng username, không dùng họ tên. extra: trường bổ sung của bản ghi (vd. targetUsername chốt lúc xóa cứng vì sau đó không tra lại được)
+  const log=(userId,action,targetUserId,description,extra)=>S.append(T.a,{id:uid('al_'),userId,action,targetUserId,description,...(extra||{}),createdAt:now()});
   const norm=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/đ/g,'d');
 
   async function seed(){
@@ -70,8 +71,8 @@ const API=(()=>{
   const vi=(a,b)=>String(a).localeCompare(String(b),'vi',{sensitivity:'base'}),given=n=>String(n||'').trim().split(/\s+/).pop(),STO={ACTIVE:0,LOCKED:1,DELETED:2};
   const byName=(a,b)=>vi(given(a.fullName),given(b.fullName))||vi(a.fullName||'',b.fullName||'');
   const SORTS={role:(a,b)=>RANK[b.role]-RANK[a.role],name:byName,
-    status:(a,b)=>STO[a.status]-STO[b.status],contact:(a,b)=>vi(a.phone||'',b.phone||'')||vi(a.email||'',b.email||'')};
-  const SORT_EMPTY={status:r=>r.limited,contact:r=>r.limited};
+    status:(a,b)=>STO[a.status]-STO[b.status],phone:(a,b)=>vi(a.phone||'',b.phone||''),email:(a,b)=>vi(a.email||'',b.email||'')};
+  const SORT_EMPTY={status:r=>r.limited,phone:r=>r.limited,email:r=>r.limited};
   const sortUsers=(rows,key,dir)=>{const f=SORTS[key]||SORTS.role,k=SORTS[key]?key:'role',sg=dir==='desc'?-1:1,emp=SORT_EMPTY[k]||(()=>false);
     return[...rows].sort((a,b)=>{const ea=emp(a),eb=emp(b);if(ea!==eb)return ea?1:-1;return(ea?0:sg*f(a,b))||byName(a,b)||vi(a.id,b.id)})};
   // CCCD là duy nhất toàn hệ thống. Bảng KIO chỉ có id + payload nên không đặt được unique index => chặn ở tầng ứng dụng (đọc mới nhất từ server, không dùng cache).
@@ -120,6 +121,7 @@ const API=(()=>{
   async function mirrorAdd(ownerId,row){ // trả true nếu đã tạo bản đối ứng
     if(await findMirror(ownerId,row))return false;
     await S.sync(T.fam,[{id:uid('fm_'),userId:row.linkedUserId,relation:inverseRel(row.relation,await ownerGender(ownerId)),linkedUserId:ownerId,auto:true}]);return true}
+  const famRef=async r=>r.linkedUserId?((await S.list(T.u)).find(u=>u.id===r.linkedUserId)||{}).username||r.fullName||'':r.fullName; // dùng cho mô tả audit
   const famName=async r=>r.linkedUserId?((await S.list(T.p)).find(p=>p.userId===r.linkedUserId)||{}).fullName||'':r.fullName;
   async function limitedView(t){const p=(await S.list(T.p)).find(x=>x.userId===t.id)||{},cp=await S.list(KIND.positions),
       kid=async(k,f)=>(await S.list(KIND[k])).filter(x=>x.userId===t.id).map(r=>pick(r,f)); // cấp trên: chỉ các cột hiển thị, không file đính kèm, không mô tả
@@ -150,6 +152,10 @@ const API=(()=>{
       return paged(sortUsers((await S.list(T.u,o)).filter(u=>(canView(m,u)||canLimited(m,u))&&(!role||u.role===role))
         .map(u=>{const p=ps.find(x=>x.userId===u.id)||{};return canView(m,u)?{...pub(u),...p,id:u.id}:{limited:true,id:u.id,role:u.role,...pick(p,LIM),profilePictureFileId:p.profilePictureFileId||'',position:curPos(cp,u.id)}})
         .filter(r=>(!status||(!r.limited&&r.status===status))&&(!Q||norm((r.limited?[r.fullName]:[r.fullName,r.username,r.email,r.phone,r.citizenID]).join(' ')).includes(Q))),sort,dir),page)},
+    async userStats(){ // số liệu tổng hợp cho các thẻ đầu màn Nhân sự: không phụ thuộc bộ lọc/phân trang; trạng thái chỉ đếm tài khoản xem được đủ (cấp trên chỉ xem hạn chế nên không biết trạng thái)
+      const m=await need();if(m.role==='EMPLOYEE')E('Bạn không có quyền xem danh sách');
+      const us=(await S.list(T.u)).filter(u=>(canView(m,u)||canLimited(m,u))&&u.status!=='DELETED'),v=us.filter(u=>canView(m,u));
+      return{total:us.length,active:v.filter(u=>u.status==='ACTIVE').length,locked:v.filter(u=>u.status==='LOCKED').length,managers:us.filter(u=>u.role==='HR_MANAGER').length}},
     async getUser(id){
       const m0=await need(),t0=(await S.list(T.u)).find(x=>x.id===id);
       if(t0&&!canView(m0,t0)&&canLimited(m0,t0))return limitedView(t0); // cấp trên: chỉ trả thông tin cơ bản
@@ -175,7 +181,7 @@ const API=(()=>{
         for(const it of list){const row={...it.data,id:uid(it.k[0]+'_'),userId:id};
           if(it.file){row.fileId=await saveFile(it.file,id,it.k);files.push(row.fileId)}
           await S.sync(KIND[it.k],[row]);rows.push([it.k,row.id])}
-        await log(m.id,'CREATE_USER',id,`${m.username} tạo tài khoản ${d.username} (${d.fullName}, ${d.role}) kèm ${list.length} bản ghi con`);
+        await log(m.id,'CREATE_USER',id,`${m.username} tạo tài khoản ${d.username} (${d.role}) kèm ${list.length} bản ghi con`);
       }catch(e){ // rollback bù
         for(const f of files)await dropFile(f);for(const[k,r]of rows)await S.del(KIND[k],[r]);
         await S.del(T.u,[id]);await S.del(T.p,['pf_'+id]);throw e}
@@ -185,7 +191,7 @@ const API=(()=>{
       if(!canManage(m,t)&&ID.some(k=>d[k]!==undefined&&d[k]!==(p[k]||'')))E('Bạn không được sửa họ tên, giới tính, quốc tịch, ngày sinh, CCCD');
       const n={...p,...d};need_(n,t.role==='SUPER_ADMIN'&&!p.citizenID?['fullName']:PF);chkNum(n);chkDates(n);if(cid(n.citizenID)!==cid(p.citizenID)&&await dupCCCD(n.citizenID,id))E(DUP_MSG); // chỉ kiểm khi CCCD thay đổi
       if(avatar){const old=p.profilePictureFileId;n.profilePictureFileId=await saveFile(avatar,id,'profile');await S.sync(T.p,[n]);await dropFile(old)}else await S.sync(T.p,[n]);
-      await log(m.id,'UPDATE_PROFILE',id,`${m.username} cập nhật hồ sơ của ${n.fullName}`)},
+      await log(m.id,'UPDATE_PROFILE',id,`${m.username} cập nhật hồ sơ của ${t.username}`)},
     async setStatus(id,status){const{m,t}=await target(id,'manage');notSelf(m,t,'khóa');if(t.status==='DELETED')E('Tài khoản đã bị xóa');
       if(status==='LOCKED')await guardLastSA(t,'khóa');Object.assign(t,{status,updatedAt:now()});await S.sync(T.u,[t]);await log(m.id,'UPDATE_USER',id,`${m.username} ${status==='LOCKED'?'khóa':'mở khóa'} tài khoản ${t.username}`)},
     async setRole(id,role){const{m,t}=await target(id,'manage');
@@ -198,10 +204,9 @@ const API=(()=>{
       Object.assign(t,{passwordHash:await hash(newPw),mustChangePassword:true,updatedAt:now()});await S.sync(T.u,[t]);await log(m.id,'RESET_PASSWORD',id,`${m.username} đặt lại mật khẩu của ${t.username}`)},
     async remove(id,hard){
       const{m,t}=await target(id,'manage');notSelf(m,t,'xóa');await guardLastSA(t,'xóa');
-      const name=((await S.list(T.p)).find(p=>p.userId===id)||{}).fullName||t.username;
-      if(!hard){await log(m.id,'SOFT_DELETE_USER',id,`${m.username} xóa mềm ${name} (${t.username})`);Object.assign(t,{status:'DELETED',deletedBy:m.id,deletedAt:now(),updatedAt:now()});return S.sync(T.u,[t])}
+      if(!hard){await log(m.id,'SOFT_DELETE_USER',id,`${m.username} xóa mềm tài khoản ${t.username}`);Object.assign(t,{status:'DELETED',deletedBy:m.id,deletedAt:now(),updatedAt:now()});return S.sync(T.u,[t])}
       if(m.role!=='SUPER_ADMIN')E('Chỉ SUPER_ADMIN được xóa cứng');
-      await log(m.id,'DELETE_USER',id,`${m.username} xóa cứng ${name} (${t.username})`); // ghi audit trước khi xóa
+      await log(m.id,'DELETE_USER',id,`${m.username} xóa cứng tài khoản ${t.username}`,{targetUsername:t.username}); // ghi audit trước khi xóa
       for(const f of(await S.list(T.f)).filter(f=>f.ownerId===id))await dropFile(f.id);
       for(const k of Object.keys(KIND)){const ids=(await S.list(KIND[k])).filter(x=>x.userId===id).map(x=>x.id);if(ids.length)await S.del(KIND[k],ids)}
       const fam=await S.list(T.fam),p0=(await S.list(T.p)).find(p=>p.userId===id)||{},lk=fam.filter(r=>r.linkedUserId===id);
@@ -234,7 +239,7 @@ const API=(()=>{
     async addFamily(id,d,linkId){const{m,t}=await target(id,'self'),row=await famBuild(m,id,d,linkId||null,false);
       Object.assign(row,{id:uid('fm_'),userId:id});await S.sync(T.fam,[row]);
       const mir=row.linkedUserId?await mirrorAdd(id,row):false;
-      await log(m.id,'ADD_FAMILY',id,`${m.username} thêm người thân (${row.relation}: ${await famName(row)}) cho ${t.username}${mir?' và tự thêm bản đối ứng bên người thân':''}`)},
+      await log(m.id,'ADD_FAMILY',id,`${m.username} thêm người thân (${row.relation}: ${await famRef(row)}) cho ${t.username}${mir?' và tự thêm bản đối ứng bên người thân':''}`)},
     async updateFamily(id,rid,d){const{m,t}=await target(id,'self'),old=(await S.list(T.fam)).find(x=>x.id===rid&&x.userId===id);if(!old)E('Không tìm thấy bản ghi');
       const row={...await famBuild(m,id,d,old.linkedUserId||null,true),id:rid,userId:id};
       if(old.auto&&row.linkedUserId&&row.relation===old.relation)row.auto=true; // tự sửa mối quan hệ => không còn là bản tự sinh
@@ -242,9 +247,9 @@ const API=(()=>{
       if(!old.auto&&old.linkedUserId){ // đồng bộ bản đối ứng tự sinh
         const mir=await findMirror(id,old);
         if(mir&&mir.auto){if(!row.linkedUserId)await S.del(T.fam,[mir.id]);else if(row.relation!==old.relation)await S.sync(T.fam,[{...mir,relation:inverseRel(row.relation,await ownerGender(id))}])}}
-      await log(m.id,'UPDATE_FAMILY',id,`${m.username} sửa người thân (${row.relation}: ${await famName(row)}) của ${t.username}`)},
+      await log(m.id,'UPDATE_FAMILY',id,`${m.username} sửa người thân (${row.relation}: ${await famRef(row)}) của ${t.username}`)},
     async delFamily(id,rid){const{m,t}=await target(id,'self'),row=(await S.list(T.fam)).find(x=>x.id===rid&&x.userId===id);if(!row)E('Không tìm thấy bản ghi');
-      await log(m.id,'DELETE_FAMILY',id,`${m.username} xóa người thân (${row.relation}: ${await famName(row)}) của ${t.username}`);await S.del(T.fam,[rid]);
+      await log(m.id,'DELETE_FAMILY',id,`${m.username} xóa người thân (${row.relation}: ${await famRef(row)}) của ${t.username}`);await S.del(T.fam,[rid]);
       if(!row.auto&&row.linkedUserId){const mir=await findMirror(id,row);if(mir&&mir.auto)await S.del(T.fam,[mir.id])}},
     async delChild(id,kind,rid){
       const{m,t}=await target(id,kind==='positions'||kind==='work'?'manage':'self'),row=(await S.list(KIND[kind])).find(x=>x.id===rid&&x.userId===id);if(!row)E('Không tìm thấy bản ghi');
@@ -255,11 +260,16 @@ const API=(()=>{
       const o=(await S.list(T.u)).find(u=>u.id===f.ownerId);if(!o)E('Bạn không có quyền xem file');
       if(!canView(m,o)){const p=(await S.list(T.p)).find(x=>x.userId===o.id)||{};if(!(canLimited(m,o)&&f.type==='profile'&&p.profilePictureFileId===f.id))E('Bạn không có quyền xem file')} // cấp trên: chỉ ảnh đại diện
       const b=await S.getFile(f.path).catch(()=>null);if(!b)E('Không đọc được file '+f.path+' (chọn lại thư mục uploads)');return URL.createObjectURL(b)},
-    async audit({q='',action='',from='',to='',page=1}={}){
+    async audit({q='',action='',user='',from='',to='',page=1}={}){
       const m=await need();if(m.role!=='SUPER_ADMIN')E('Chỉ SUPER_ADMIN xem được nhật ký');
       if(from&&to&&from>to)E('Từ ngày phải trước hoặc bằng Đến ngày');
-      const all=(await S.list(T.a)).sort((a,b)=>b.createdAt.localeCompare(a.createdAt)),Q=norm(q);
-      const items=all.filter(a=>(!action||a.action===action)&&(!from||ld(a.createdAt)>=from)&&(!to||ld(a.createdAt)<=to)&&(!Q||norm(a.description+' '+a.action).includes(Q)));
-      return{...paged(items,page),actions:[...new Set(all.map(a=>a.action))].sort()}},
+      // Hai cột: Người thực hiện (userId) và Người bị tác động (targetUserId), đều chỉ hiện username. Tài khoản đã xóa cứng: lấy username đã chốt ở bản ghi DELETE_USER (bản cũ chưa có thì đọc ngoặc cuối mô tả)
+      const U=new Map((await S.list(T.u)).map(x=>[x.id,x])),raw=await S.list(T.a),gone={};
+      raw.forEach(a=>{if(a.action==='DELETE_USER'&&a.targetUserId){const x=a.targetUsername||(/\(([^()]+)\)\s*$/.exec(a.description||'')||[])[1];if(x)gone[a.targetUserId]=x}});
+      const un=id=>!id?'':(U.get(id)||{}).username||gone[id]||'đã xóa (#'+String(id).slice(-4)+')';
+      const all=raw.sort((a,b)=>b.createdAt.localeCompare(a.createdAt)).map(a=>({...a,actorUsername:un(a.userId),targetUsername:un(a.targetUserId)})),Q=norm(q);
+      const items=all.filter(a=>(!action||a.action===action)&&(!user||a.userId===user)&&(!from||ld(a.createdAt)>=from)&&(!to||ld(a.createdAt)<=to)&&(!Q||norm(a.description+' '+a.action+' '+a.actorUsername+' '+a.targetUsername).includes(Q)));
+      const people=[...new Map(all.filter(a=>a.userId).map(a=>[a.userId,{id:a.userId,username:a.actorUsername}])).values()].sort((a,b)=>vi(a.username,b.username));
+      return{...paged(items,page),actions:[...new Set(all.map(a=>a.action))].sort(),people}},
     _f:{}
   }})();

@@ -11,7 +11,7 @@ const CHILD={
 const FAM_F=[{k:'relation',l:'Mối quan hệ',r:1,dl:['Cha','Mẹ','Vợ','Chồng','Con','Anh','Chị','Em','Ông','Bà','Cháu','Chú','Bác','Cô','Dì','Cậu','Người thân']},{k:'fullName',l:'Họ tên',r:1},{k:'dateOfBirth',l:'Ngày sinh',t:'date'},{k:'gender',l:'Giới tính',t:'select',o:[['','—'],...GENDER]},{k:'nationality',l:'Quốc tịch'},{k:'citizenID',l:'CCCD',n:1},{k:'address',l:'Địa chỉ',full:1},{k:'email',l:'Email',t:'email'},{k:'phone',l:'Điện thoại',n:1}];
 const PROFILE_F=[{k:'fullName',l:'Họ tên',r:1},{k:'gender',l:'Giới tính',t:'select',o:GENDER},{k:'nationality',l:'Quốc tịch',r:1},{k:'dateOfBirth',l:'Ngày sinh',t:'date',r:1},{k:'citizenID',l:'CCCD',r:1,n:1},{k:'phone',l:'Điện thoại',r:1,n:1},{k:'email',l:'Email',t:'email',r:1},{k:'address',l:'Địa chỉ',full:1}];
 const CONTACT_F=PROFILE_F.filter(f=>['phone','email','address'].includes(f.k));
-let ME=null,TAB='profile',FILTER={q:'',role:'',status:'',page:1,sort:'role',dir:'asc'},AF={q:'',action:'',from:'',to:'',page:1};
+let ME=null,TAB='profile',FILTER={q:'',role:'',status:'',page:1,sort:'role',dir:'asc'},AF={q:'',action:'',user:'',from:'',to:'',page:1};
 const pager=(r,w)=>`<div class="bar pager"><span style="color:var(--mut)">Hiển thị dòng ${r.items.length?(r.page-1)*r.pageSize+1:0} - ${(r.page-1)*r.pageSize+r.items.length} · Trang <input class="pgin" type="number" min="1" value="${r.page}" data-pgin="${w}" title="Nhập số trang rồi nhấn Enter"></span><div class="sp"></div>${[['« Đầu',1],['Trước',r.page-1],['Sau',r.page+1],['Cuối »',r.pages]].map(([l,n],i)=>`<button class="sm" data-act="pg" data-w="${w}" data-p="${n}" ${(i<2?r.page<=1:r.page>=r.pages)?'disabled':''}>${l}</button>`).join('')}</div>`;
 
 function toast(m,k='ok'){const t=$('#toast');t.className=k;t.innerHTML=`<i class="fa-solid ${{ok:'fa-circle-check',err:'fa-circle-exclamation',warn:'fa-triangle-exclamation'}[k]||'fa-circle-info'}"></i><span>${esc(m)}</span>`;t.style.display='flex';clearTimeout(toast.h);toast.h=setTimeout(()=>t.style.display='none',k==='err'?6000:3500)}
@@ -54,10 +54,14 @@ const actCls=a=>/DELETE|REMOVE|HARD/.test(a)?'red':/^(ADD|CREATE|RESTORE)/.test(
 const dtc=s=>{const d=new Date(s);return`<div>${d.toLocaleDateString('vi-VN')}</div><div class="cell-sub">${d.toLocaleTimeString('vi-VN')}</div>`};
 
 const AVA={}; // cache blob URL theo fileId để không đọc lại file mỗi lần vẽ sidebar
-async function myAvatar(){const el=$('#meAva');if(!el)return;
-  try{const fid=(await API.getUser(ME.id)).profile.profilePictureFileId;if(!fid)return;
+const MYNAME={}; // cache họ tên theo id người đăng nhập để thanh trên không nhấp nháy
+async function myAvatar(){const els=[$('#meAva'),$('#topAva')].filter(Boolean);if(!els.length)return;
+  const nm=$('#topName');if(nm&&MYNAME[ME.id])nm.textContent=MYNAME[ME.id];
+  try{const p=(await API.getUser(ME.id)).profile;
+    if(p.fullName){MYNAME[ME.id]=p.fullName;const n=$('#topName');if(n)n.textContent=p.fullName}
+    const fid=p.profilePictureFileId;if(!fid)return;
     const url=AVA[fid]||(AVA[fid]=await API.fileUrl(fid));
-    if(el.isConnected)el.innerHTML=`<img src="${esc(url)}" alt="" onerror="this.parentNode.textContent=this.parentNode.dataset.ini">`}catch{}}
+    els.forEach(el=>{if(el.isConnected)el.innerHTML=`<img src="${esc(url)}" alt="" onerror="this.parentNode.textContent=this.parentNode.dataset.ini">`})}catch{}}
 
 const ini=n=>String(n||'').trim().split(/\s+/).slice(-2).map(w=>w[0]||'').join('').toUpperCase();
 const avaBox=(fid,name,cls='')=>`<span class="ava-box ${cls}">${fid?`<img data-fid="${esc(fid)}" alt="" onerror="this.remove()">`:''}<b>${esc(ini(name))}</b></span>`;
@@ -67,13 +71,13 @@ async function famAvatars(){
     try{const fid=(await API.getUser(c.dataset.uid)).profile.profilePictureFileId;if(!fid)return;
       const url=AVA[fid]||(AVA[fid]=await API.fileUrl(fid));
       if(box.isConnected)box.insertAdjacentHTML('afterbegin',`<img src="${esc(url)}" alt="" onerror="this.remove()">`)}catch{}}))}
+const loadFids=(root=document)=>root.querySelectorAll('[data-fid]').forEach(async i=>{try{i.src=await API.fileUrl(i.dataset.fid)}catch{}});
 function shell(html){
   document.body.classList.remove('nav-open');
   const nav=[['profile','Hồ sơ cá nhân','fa-id-card',1],['users','Nhân sự','fa-users',ME.role!=='EMPLOYEE'],['audit','Nhật ký','fa-clock-rotate-left',ME.role==='SUPER_ADMIN']].filter(n=>n[3]);
   const cur=location.hash.split('/')[1]||'profile',title=(nav.find(n=>n[0]===cur)||nav[0])[1];
-  $('#app').innerHTML=`<div class="shell"><nav><div class="brand"><span class="brand-logo"><i class="fa-solid fa-users"></i></span><div><div class="brand-name">HRM</div><div class="brand-sub">Quản lý nhân sự</div></div></div><div class="nav-group">Menu</div>${nav.map(([k,l,ic])=>`<a data-go="${k}" class="${cur===k?'on':''}"><i class="fa-solid ${ic}"></i>${l}</a>`).join('')}<div class="sp"></div><div class="nav-group">Hệ thống</div><a data-act="dir"><i class="fa-regular fa-folder-open"></i>Thư mục uploads</a><a data-act="pw"><i class="fa-solid fa-key"></i>Đổi mật khẩu</a><div class="side-user"><span class="avatar" id="meAva" data-ini="${esc(ME.username.slice(0,2).toUpperCase())}">${esc(ME.username.slice(0,2).toUpperCase())}</span><div><div class="side-user-name">${esc(ME.username)}</div><div class="side-user-role">${RL[ME.role]}</div></div></div><a data-act="logout"><i class="fa-solid fa-right-from-bracket"></i>Đăng xuất</a></nav><div class="scrim" data-act="menu"></div><main><div class="topbar"><button class="hamburger" data-act="menu" aria-label="Mở menu"><i class="fa-solid fa-bars"></i></button><span class="crumb-title">${title}</span><div class="sp"></div><span class="chip"><i class="fa-solid fa-database"></i>Dữ liệu: ${Store.mode==='kio'?'KIO':'Local'}</span></div><div class="view">${html}</div></main></div>`;
-  document.querySelectorAll('[data-fid]').forEach(async i=>{try{i.src=await API.fileUrl(i.dataset.fid)}catch{}});
-  myAvatar()}
+  $('#app').innerHTML=`<div class="shell"><nav><div class="brand"><span class="brand-logo"><i class="fa-solid fa-users"></i></span><div><div class="brand-name">HRM</div><div class="brand-sub">Quản lý nhân sự</div></div></div><div class="nav-group">Menu</div>${nav.map(([k,l,ic])=>`<a data-go="${k}" class="${cur===k?'on':''}"><i class="fa-solid ${ic}"></i>${l}</a>`).join('')}<div class="sp"></div><div class="nav-group">Hệ thống</div><a data-act="dir"><i class="fa-regular fa-folder-open"></i>Thư mục uploads</a><a data-act="pw"><i class="fa-solid fa-key"></i>Đổi mật khẩu</a><div class="side-user"><span class="avatar" id="meAva" data-ini="${esc(ME.username.slice(0,2).toUpperCase())}">${esc(ME.username.slice(0,2).toUpperCase())}</span><div><div class="side-user-name">${esc(ME.username)}</div><div class="side-user-role">${RL[ME.role]}</div></div></div><a data-act="logout"><i class="fa-solid fa-right-from-bracket"></i>Đăng xuất</a></nav><div class="scrim" data-act="menu"></div><main><div class="topbar"><button class="hamburger" data-act="menu" aria-label="Mở menu"><i class="fa-solid fa-bars"></i></button><span class="crumb-title">${title}</span><div class="sp"></div><span class="chip"><i class="fa-solid fa-database"></i>Dữ liệu: ${Store.mode==='kio'?'KIO':'Local'}</span><div class="top-user"><span class="avatar" id="topAva" data-ini="${esc(ME.username.slice(0,2).toUpperCase())}">${esc(ME.username.slice(0,2).toUpperCase())}</span><div><b id="topName">${esc(MYNAME[ME.id]||ME.username)}</b><small>@${esc(ME.username)}</small></div></div></div><div class="view">${html}</div></main></div>`;
+  loadFids();myAvatar()}
 
 function loginView(){$('#app').innerHTML=`<div class="card login"><div class="brand-logo lg"><i class="fa-solid fa-users"></i></div><h2>Đăng nhập</h2><p class="sub">Hệ thống quản lý nhân sự</p><form id="lf"><label>Tên đăng nhập<input name="u" required autofocus></label><label>Mật khẩu<input name="p" type="password" required></label><div class="err" id="le"></div><button class="pri" style="width:100%">Đăng nhập</button></form></div>`;
   $('#lf').onsubmit=async e=>{e.preventDefault();try{await API.login(e.target.u.value,e.target.p.value);home();boot()}catch(x){$('#le').textContent=x.message}}}
@@ -90,8 +94,8 @@ function tenure(work){const T=ymd(todayS()),iv=(work||[]).map(w=>[ymd(w.fromDate
   const m=Math.round(ms/DAY/30.4375);if(m<1)return'Dưới 1 tháng';const y=Math.floor(m/12),r=m%12;return[y?y+' năm':'',r?r+' tháng':''].filter(Boolean).join(' ')}
 function certInfo(cs){const t=ymd(todayS());let ex=0,sn=0;for(const c of cs||[]){const e=ymd(c.expiredDate);if(isNaN(e))continue;if(e<t)ex++;else if(e<=t+30*DAY)sn++}return{ex,sn}}
 function summary(d){const cp=(d.positions||[]).filter(r=>String(r.isCurrent)==='true').sort((a,b)=>String(b.fromDate).localeCompare(String(a.fromDate)))[0],{sn}=certInfo(d.certificates);
-  return[['Chức vụ hiện tại',esc(cp&&cp.position)||'—'],['Thời gian công tác',tenure(d.work)],['Bằng cấp',String((d.degrees||[]).length)],
-    ['Chứng chỉ',(d.certificates||[]).length+(sn?` <span class="tag orange">${sn} sắp hết hạn</span>`:'')]]}
+  return[['Chức vụ hiện tại',esc(cp&&cp.position)||'—','fa-id-badge','','txt'],['Thời gian công tác',tenure(d.work),'fa-hourglass-half','green','txt'],['Bằng cấp',String((d.degrees||[]).length),'fa-graduation-cap','violet',''],
+    ['Chứng chỉ',(d.certificates||[]).length+(sn?` <span class="tag orange">${sn} sắp hết hạn</span>`:''),'fa-certificate','orange','']]}
 // ----- Chức vụ / Công tác: dòng thời gian. Bằng cấp / Chứng chỉ: bảng trong cùng một tab -----
 const rowActs=(k,id,rid)=>`<button class="sm" data-act="editc" data-id="${id}" data-kind="${k}" data-rid="${rid}">Sửa</button> <button class="sm bad" data-act="delc" data-id="${id}" data-kind="${k}" data-rid="${rid}">Xóa</button>`;
 const addBtn=(k,id,first)=>`<button class="pri" data-act="add" data-id="${id}" data-kind="${k}"><i class="fa-solid fa-plus"></i>Thêm ${CHILD[k].t.toLowerCase()}${first?' đầu tiên':''}</button>`;
@@ -104,7 +108,32 @@ function tlItem(k,r,id,ed){const cur=k==='positions'?String(r.isCurrent)==='true
 const timeline=(k,rows,id,ed)=>`<ul class="tl" id="tl-${k}" tabindex="0" aria-label="Dòng thời gian: ${CHILD[k].t}">${[...rows].sort((a,b)=>String(a.fromDate).localeCompare(String(b.fromDate))).map(r=>tlItem(k,r,id,ed)).join('')}</ul>`;
 const tlNav=k=>`<span class="tl-nav" data-nav="tl-${k}" hidden><button class="sm" data-act="tlgo" data-t="tl-${k}" data-d="-1" aria-label="Cuộn sang trái"><i class="fa-solid fa-chevron-left"></i></button><button class="sm" data-act="tlgo" data-t="tl-${k}" data-d="1" aria-label="Cuộn sang phải"><i class="fa-solid fa-chevron-right"></i></button></span>`;
 function tlInit(){document.querySelectorAll('.tl').forEach(el=>{el.scrollLeft=el.scrollWidth;const n=document.querySelector(`[data-nav="${el.id}"]`);if(n)n.hidden=el.scrollWidth<=el.clientWidth+1})}
-const tlBody=(k,rows,id,ed)=>!(rows||[]).length?empty(CI[k],`Chưa có ${CHILD[k].t.toLowerCase()}`,ed?'Thêm bản ghi đầu tiên để hoàn thiện hồ sơ.':'Chưa có thông tin nào được cập nhật.',ed?addBtn(k,id,1):''):`<div class="bar"><div class="sp"></div>${tlNav(k)}${ed?addBtn(k,id):''}</div>${timeline(k,rows,id,ed)}`;
+// Dải chip tóm tắt ở đầu mỗi tab (lấp chỗ trống bên trái thanh nút)
+const chips=a=>`<div class="chips">${a.map(x=>`<span class="chip">${x}</span>`).join('')}</div>`;
+function tlChips(k,rows){const n=rows.length;
+  if(k==='positions'){const cur=rows.filter(r=>String(r.isCurrent)==='true').sort((a,b)=>String(b.fromDate).localeCompare(String(a.fromDate)))[0];
+    return chips([`<b>${n}</b> chức vụ`,`Đang giữ: <b>${esc(cur&&cur.position)||'—'}</b>`])}
+  const cos=new Set(rows.map(r=>String(r.company||'').trim().toLowerCase()).filter(Boolean)).size;
+  return chips([`<b>${n}</b> vị trí`,`<b>${cos}</b> công ty`,`Tổng thời gian: <b>${tenure(rows)}</b>`])}
+const famChips=fam=>{const m={};fam.forEach(r=>{const k=String(r.relation||'').trim()||'Khác';m[k]=(m[k]||0)+1});
+  return chips([`<b>${fam.length}</b> người thân`,...Object.entries(m).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([k,v])=>`${esc(k)}: <b>${v}</b>`)])};
+// Mức hoàn thiện hồ sơ: 6 mục có dữ liệu hay chưa (địa chỉ, chức vụ, quá trình công tác, bằng cấp, chứng chỉ, gia phả).
+// Gợi ý mỗi lần một mục thiếu, chỉ cho người sửa được (chức vụ, công tác do quản lý nhập nên không gợi ý).
+const METER_I=[
+  {l:'Địa chỉ',has:d=>!!String(d.profile.address??'').trim(),tip:'Hãy bổ sung địa chỉ của bạn để hồ sơ thêm đầy đủ nhé.',act:'editp'},
+  {l:'Chức vụ',has:d=>!!(d.positions||[]).length},
+  {l:'Quá trình công tác',has:d=>!!(d.work||[]).length},
+  {l:'Bằng cấp',has:d=>!!(d.degrees||[]).length,tip:'Hãy thêm bằng cấp đầu tiên của bạn để hoàn thiện hồ sơ nhé.',act:'add',kind:'degrees'},
+  {l:'Chứng chỉ',has:d=>!!(d.certificates||[]).length,tip:'Bạn có chứng chỉ nào chưa? Hãy thêm chứng chỉ đầu tiên để hồ sơ thêm nổi bật nhé.',act:'add',kind:'certificates'},
+  {l:'Gia phả',has:d=>!!(d.family||[]).length,tip:'Hãy thêm người thân đầu tiên vào gia phả để hoàn thiện hồ sơ nhé.',act:'addf'}];
+function meter(d,id,canEdit){const miss=METER_I.filter(x=>!x.has(d)),pct=Math.round((METER_I.length-miss.length)/METER_I.length*100),
+    nx=canEdit?miss.find(x=>x.tip):null,
+    note=nx?`<p class="meter-note"><i class="fa-regular fa-lightbulb"></i>${esc(nx.tip)} <button class="sm" data-act="${nx.act}" data-id="${id}"${nx.kind?` data-kind="${nx.kind}"`:''}>${nx.act==='editp'?'Cập nhật':'Thêm ngay'}</button></p>`
+      :miss.length?`<p class="meter-note">Còn thiếu: ${miss.map(x=>esc(x.l)).join(', ')}.</p>`
+      :'<p class="meter-note ok"><i class="fa-solid fa-circle-check"></i>Hồ sơ đã hoàn thiện, cảm ơn bạn!</p>';
+  return`<div class="card pmeter ${pct>=100?'full':pct<50?'low':''}"><h3><i class="fa-solid fa-gauge-high"></i>Mức hoàn thiện hồ sơ</h3><div class="meter" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100" aria-label="Mức hoàn thiện hồ sơ"><span style="width:${pct}%"></span></div><b class="pct">${pct}%</b>${note}</div>`}
+// Chức vụ và Quá trình công tác nằm chung một tab, mỗi mục một thẻ: tiêu đề, dải chip, nút cuộn, nút thêm, dòng thời gian
+const tlPanel=(k,rows,id,ed)=>{rows=rows||[];return`<div class="card"><div class="sechd"><h3><i class="fa-solid ${CI[k]}"></i>${CHILD[k].t}</h3>${rows.length?tlChips(k,rows):''}<div class="sp"></div>${tlNav(k)}${ed?addBtn(k,id):''}</div>${rows.length?timeline(k,rows,id,ed):`<p class="none">${ed?'Chưa có. Bấm "Thêm" để bổ sung.':'Chưa có thông tin nào được cập nhật.'}</p>`}</div>`};
 const tlCard=(k,rows,id)=>(rows||[]).length?`<div class="card"><div class="sechd"><h3><i class="fa-solid ${CI[k]}"></i>${CHILD[k].t}</h3><div class="sp"></div>${tlNav(k)}</div>${timeline(k,rows,id,false)}</div>`:'';
 const qCell=(f,r)=>{const v=r[f.k];if(f.k==='expiredDate'&&v){const t=ymd(todayS()),e=ymd(v);return esc(v)+(e<t?' <span class="tag red">Hết hạn</span>':e<=t+30*DAY?' <span class="tag orange">Sắp hết hạn</span>':'')}return esc(v)||'—'};
 function qTable(k,rows,id,ed){const c=CHILD[k],cols=c.f.filter(f=>f.t!=='file'&&c.c.includes(f.k));
@@ -112,21 +141,33 @@ function qTable(k,rows,id,ed){const c=CHILD[k],cols=c.f.filter(f=>f.t!=='file'&&
 function qualCard(k,rows,id,ed,ro){rows=rows||[];if(ro&&!rows.length)return'';
   return`<div class="card"><div class="sechd"><h3><i class="fa-solid ${CI[k]}"></i>${CHILD[k].t}</h3><div class="sp"></div>${ed?addBtn(k,id):''}</div>${rows.length?qTable(k,rows,id,ed):`<p class="none">${ed?'Chưa có. Bấm "Thêm" để bổ sung.':'Chưa có thông tin nào được cập nhật.'}</p>`}</div>`}
 async function profileView(id){
-  const d=await API.getUser(id),u=d.user,p=d.profile,mng=API.canManage(ME,u),self=ME.id===id,editC=k=>k==='positions'||k==='work'?mng:(mng||self);
+  const d=await API.getUser(id),u=d.user,p=d.profile,mng=API.canManage(ME,u),self=ME.id===id;
   if(d.limited){VIEW={d}; // cấp trên: chỉ xem; thẻ đầu + các mục có dữ liệu (không file, không mô tả công tác)
     shell(`<div class="card phead lim">${avaBox(p.profilePictureFileId,p.fullName,'xl')}<div class="phead-info"><h2>${esc(p.fullName)}</h2><div class="phead-sub">${esc(d.position)||''}</div><div class="phead-tags"><span class="tag ${u.role}">${RL[u.role]}</span><span class="tag slate">Chỉ xem</span></div></div>${facts([['Ngày sinh',esc(p.dateOfBirth)||'—'],['Giới tính',esc(p.gender)||'—'],['Quốc tịch',esc(p.nationality)||'—'],['Thời gian công tác',tenure(d.work)]])}</div>${tlCard('positions',d.positions,id)}${tlCard('work',d.work,id)}${qualCard('degrees',d.degrees,id,false,true)}${qualCard('certificates',d.certificates,id,false,true)}`);tlInit();return}
-  const tabs=[['profile','Hồ sơ'],['positions','Chức vụ'],['work','Quá trình công tác'],['quals','Bằng cấp & chứng chỉ'],['family','Gia phả']];if(!tabs.some(t=>t[0]===TAB))TAB='profile';
+  VIEW={d,id};
+  const head=`<div class="card phead">${avaBox(p.profilePictureFileId,p.fullName||u.username,'xl')}<div class="phead-info"><h2>${esc(p.fullName||u.username)}</h2><div class="phead-sub">@${esc(u.username)}</div><div class="phead-tags"><span class="tag ${u.role}">${RL[u.role]}</span><span class="tag ${u.status}">${ST[u.status]}</span></div></div>${mng||self?`<button data-act="editp" data-id="${id}"><i class="fa-solid fa-pen"></i>Sửa hồ sơ</button>`:''}</div>${statRow(summary(d))}`;
+  if(TAB==='work')TAB='positions'; // tab cũ đã gộp vào Chức vụ & công tác
+  if(!PTABS.some(t=>t[0]===TAB))TAB='profile';
+  shell(`${head}<div class="tabs" id="ptabs">${PTABS.map(([k,l])=>`<a data-tab="${k}" data-id="${id}" class="${TAB===k?'on':''}">${l}</a>`).join('')}</div><div id="pbody">${profileBody(d,id)}</div>`);tlInit()}
+const PTABS=[['profile','Hồ sơ'],['positions','Chức vụ & công tác'],['quals','Bằng cấp & chứng chỉ'],['family','Gia phả']];
+// Nội dung của tab hiện tại (dựng riêng để đổi tab không phải tải lại và vẽ lại thẻ tóm tắt)
+function profileBody(d,id){
+  const u=d.user,p=d.profile,mng=API.canManage(ME,u),self=ME.id===id,editC=k=>k==='positions'||k==='work'?mng:(mng||self);
   let body,bare=false; // bare: nội dung tự có thẻ riêng
-  const head=`<div class="card phead">${avaBox(p.profilePictureFileId,p.fullName||u.username,'xl')}<div class="phead-info"><h2>${esc(p.fullName||u.username)}</h2><div class="phead-sub">@${esc(u.username)}</div><div class="phead-tags"><span class="tag ${u.role}">${RL[u.role]}</span><span class="tag ${u.status}">${ST[u.status]}</span></div></div>${mng||self?`<button data-act="editp" data-id="${id}"><i class="fa-solid fa-pen"></i>Sửa hồ sơ</button>`:''}${facts(summary(d))}</div>`;
   if(TAB==='profile'){const g=ks=>kv(p,PROFILE_F.filter(f=>ks.includes(f.k)).map(f=>[f.k,f.l]));
-    body=`<div class="pgrid"><div class="card"><h3><i class="fa-regular fa-id-card"></i>Thông tin cá nhân</h3>${g(['fullName','gender','nationality','dateOfBirth','citizenID'])}</div><div class="card"><h3><i class="fa-regular fa-address-book"></i>Liên hệ</h3>${g(['phone','email','address'])}</div></div>`;bare=true}
+    body=`<div class="pgrid"><div class="card pc-personal"><h3><i class="fa-regular fa-id-card"></i>Thông tin cá nhân</h3>${g(['fullName','dateOfBirth','gender','nationality','citizenID'])}</div><div class="card"><h3><i class="fa-regular fa-address-book"></i>Liên hệ</h3>${g(['phone','email','address'])}</div></div>${meter(d,id,editC('degrees'))}`;bare=true}
   else if(TAB==='family')body=famBody(d,id,editC('family'));
   else if(TAB==='quals'){bare=true;body=['degrees','certificates'].map(k=>qualCard(k,d[k],id,editC(k))).join('')}
-  else body=tlBody(TAB,d[TAB],id,editC(TAB));
-  VIEW={d};shell(`${head}<div class="tabs">${tabs.map(([k,l])=>`<a data-tab="${k}" data-id="${id}" class="${TAB===k?'on':''}">${l}</a>`).join('')}</div>${bare?body:`<div class="card">${body}</div>`}`);tlInit()}
+  else{bare=true;body=['positions','work'].map(k=>tlPanel(k,d[k],id,editC(k))).join('')}
+  return bare?body:`<div class="card">${body}</div>`}
+// Đổi tab: chỉ thay nội dung bên dưới, giữ nguyên thẻ tóm tắt (không gọi lại API)
+function switchTab(k,id){const pb=$('#pbody'),pt=$('#ptabs');
+  if(!pb||!pt||!VIEW.d||VIEW.d.limited||VIEW.id!==id)return false;
+  TAB=k;pt.querySelectorAll('a[data-tab]').forEach(a=>a.classList.toggle('on',a.dataset.tab===k));
+  pb.innerHTML=profileBody(VIEW.d,id);loadFids(pb);tlInit();return true}
 let VIEW={};
 const famCard=(r,id,canEdit)=>`<div class="fcard"><div class="fcard-top">${avaBox(r.linked?r.profilePictureFileId:'',r.fullName)}<div class="fcard-name"><b>${esc(r.fullName)}</b><div class="fcard-tags"><span class="tag">${esc(r.relation)}</span>${r.linked?'<span class="tag slate">Nhân sự</span>':''}</div></div>${famMenu(r,id,canEdit)}</div><div class="fcard-meta"><span><i class="fa-regular fa-calendar"></i>${esc(r.dateOfBirth)||'—'}</span><span><i class="fa-solid fa-venus-mars"></i>${esc(r.gender)||'—'}</span></div><button class="sm" data-act="viewf" data-rid="${r.id}">Xem chi tiết</button></div>`;
-const famBody=(d,id,canEdit)=>!d.family.length?empty('fa-users','Chưa có người thân',canEdit?'Thêm người thân đầu tiên để hoàn thiện hồ sơ.':'Chưa có thông tin nào được cập nhật.',canEdit?`<button class="pri" data-act="addf" data-id="${id}"><i class="fa-solid fa-plus"></i>Thêm người thân đầu tiên</button>`:''):`${canEdit?`<div class="bar"><div class="sp"></div><button class="pri" data-act="addf" data-id="${id}">Thêm người thân</button></div>`:''}<div class="fam-grid">${d.family.map(r=>famCard(r,id,canEdit)).join('')}</div>`;
+const famBody=(d,id,canEdit)=>!d.family.length?empty('fa-users','Chưa có người thân',canEdit?'Thêm người thân đầu tiên để hoàn thiện hồ sơ.':'Chưa có thông tin nào được cập nhật.',canEdit?`<button class="pri" data-act="addf" data-id="${id}"><i class="fa-solid fa-plus"></i>Thêm người thân đầu tiên</button>`:''):`<div class="bar">${famChips(d.family)}<div class="sp"></div>${canEdit?`<button class="pri" data-act="addf" data-id="${id}">Thêm người thân</button>`:''}</div><div class="fam-grid">${d.family.map(r=>famCard(r,id,canEdit)).join('')}</div>`;
 function famMenu(r,id,canEdit){const it=[];
   if(r.canOpen)it.push(`<button data-go="users/${r.linkedUserId}"><i class="fa-solid fa-id-card"></i>Xem hồ sơ</button>`);
   if(canEdit)it.push(`<button data-act="editf" data-id="${id}" data-rid="${r.id}"><i class="fa-solid fa-pen"></i>Sửa</button>`,'<hr>',`<button class="bad" data-act="delf" data-id="${id}" data-rid="${r.id}"><i class="fa-solid fa-trash"></i>Xóa</button>`);
@@ -154,20 +195,23 @@ function userMenu(r,m,self,sa){const live=r.status!=='DELETED',it=[],b=(act,ic,l
   return it.length?`<details class="more"><summary class="btn-ico" title="Thao tác"><i class="fa-solid fa-ellipsis"></i></summary><div class="menu">${it.join('')}</div></details>`:''}
 
 const sortTh=(k,l)=>{const on=FILTER.sort===k,d=FILTER.dir==='desc';return`<th aria-sort="${on?(d?'descending':'ascending'):'none'}"><button type="button" class="thsort${on?' on':''}" data-act="sort" data-k="${k}" title="Sắp xếp theo ${l.toLowerCase()}">${l}<i class="fa-solid ${on?(d?'fa-sort-down':'fa-sort-up'):'fa-sort'}"></i></button></th>`};
+// Thẻ số liệu dùng chung (màn Nhân sự và đầu Hồ sơ): [nhãn, giá trị, icon, màu, 'txt' nếu giá trị là chữ]
+const statRow=a=>`<div class="stats">${a.map(([l,n,ic,c,t])=>`<div class="stat${t?' txt':''}"><span class="stat-ico ${c}"><i class="fa-solid ${ic}"></i></span><div><b>${n}</b><small>${l}</small></div></div>`).join('')}</div>`;
+const statCards=st=>st?statRow([['Tổng nhân sự',st.total,'fa-users',''],['Đang hoạt động',st.active,'fa-circle-check','green'],['Đã khóa',st.locked,'fa-lock','orange'],['Quản lý nhân sự',st.managers,'fa-user-tie','violet']]):'';
 async function usersView(){
-  const res=await API.listUsers({...FILTER,fresh:FILTER.fresh}),rows=res.items,sa=ME.role==='SUPER_ADMIN';delete FILTER.fresh;
-  shell(`<h2>Nhân sự</h2><div class="bar"><input id="q" placeholder="Tìm họ tên, tài khoản, email, SĐT, CCCD" value="${esc(FILTER.q)}"><select id="fr"><option value="">Mọi vai trò</option>${Object.entries(RL).map(([k,v])=>`<option value="${k}" ${FILTER.role===k?'selected':''}>${v}</option>`).join('')}</select><select id="fs"><option value="">Mọi trạng thái</option>${Object.entries(ST).map(([k,v])=>`<option value="${k}" ${FILTER.status===k?'selected':''}>${v}</option>`).join('')}</select><div class="sp"></div><button class="pri" data-act="newu">Thêm người dùng</button></div>
-  <div class="card"><div class="tbl-wrap"><table><tr>${[['name','Nhân sự'],['role','Vai trò'],['status','Trạng thái'],['contact','Liên hệ']].map(([k,l])=>sortTh(k,l)).join('')}<th></th></tr>${rows.map(r=>{const m=API.canManage(ME,r),self=r.id===ME.id,lim=r.limited;return`<tr><td class="cell-head"><div class="usercell">${avaBox(r.profilePictureFileId,r.fullName||r.username)}<div><div class="cell-main">${esc(r.fullName)}${lim?' <span class="tag slate">Chỉ xem</span>':''}</div>${lim?'':`<div class="cell-sub">@${esc(r.username)}</div>`}</div></div></td><td data-l="Vai trò"><span class="tag ${r.role}">${RL[r.role]}</span></td><td data-l="Trạng thái">${lim?'—':`<span class="tag ${r.status}">${ST[r.status]}</span>`}</td><td data-l="Liên hệ">${lim?'—':`<div>${esc(r.phone)||'—'}</div><div class="cell-sub">${esc(r.email)}</div>`}</td><td class="acts"><button class="sm" data-go="users/${r.id}">Xem</button>${lim?'':userMenu(r,m,self,sa)}</td></tr>`}).join('')||'<tr><td colspan="5">Không có kết quả.</td></tr>'}</table></div>${pager(res,'users')}</div>`);FILTER.page=res.page;
+  const fresh=FILTER.fresh,[res,st]=await Promise.all([API.listUsers({...FILTER,fresh}),API.userStats().catch(()=>null)]),rows=res.items,sa=ME.role==='SUPER_ADMIN';delete FILTER.fresh;
+  shell(`<h2>Nhân sự</h2>${statCards(st)}<div class="bar"><input id="q" placeholder="Tìm họ tên, tài khoản, email, SĐT, CCCD" value="${esc(FILTER.q)}"><select id="fr"><option value="">Mọi vai trò</option>${Object.entries(RL).map(([k,v])=>`<option value="${k}" ${FILTER.role===k?'selected':''}>${v}</option>`).join('')}</select><select id="fs"><option value="">Mọi trạng thái</option>${Object.entries(ST).map(([k,v])=>`<option value="${k}" ${FILTER.status===k?'selected':''}>${v}</option>`).join('')}</select><div class="sp"></div><button class="pri" data-act="newu">Thêm người dùng</button></div>
+  <div class="card"><div class="tbl-wrap"><table><tr>${[['name','Nhân sự'],['role','Vai trò'],['status','Trạng thái'],['phone','Số điện thoại'],['email','Email']].map(([k,l])=>sortTh(k,l)).join('')}<th></th></tr>${rows.map(r=>{const m=API.canManage(ME,r),self=r.id===ME.id,lim=r.limited;return`<tr><td class="cell-head"><div class="usercell">${avaBox(r.profilePictureFileId,r.fullName||r.username)}<div><div class="cell-main">${esc(r.fullName)}${lim?' <span class="tag slate">Chỉ xem</span>':''}</div>${lim?'':`<div class="cell-sub">@${esc(r.username)}</div>`}</div></div></td><td data-l="Vai trò"><span class="tag ${r.role}">${RL[r.role]}</span></td><td data-l="Trạng thái">${lim?'—':`<span class="tag ${r.status}">${ST[r.status]}</span>`}</td><td data-l="Điện thoại">${lim?'—':esc(r.phone)||'—'}</td><td data-l="Email" class="wrapany">${lim?'—':esc(r.email)||'—'}</td><td class="acts"><button class="sm" data-go="users/${r.id}">Xem</button>${lim?'':userMenu(r,m,self,sa)}</td></tr>`}).join('')||'<tr><td colspan="6">Không có kết quả.</td></tr>'}</table></div>${pager(res,'users')}</div>`);FILTER.page=res.page;
   const re=()=>{FILTER={q:$('#q').value,role:$('#fr').value,status:$('#fs').value,page:1,sort:FILTER.sort,dir:FILTER.dir};usersView().then(()=>{const q=$('#q');q.focus();q.setSelectionRange(99,99)}).catch(x=>toast(x.message,'err'))};
   $('#q').oninput=()=>{clearTimeout(re.h);re.h=setTimeout(re,250)};$('#fr').onchange=re;$('#fs').onchange=re}
 async function auditView(){
   const r=await API.audit(AF),mx=API.maxDate('fromDate');AF.page=r.page;
-  shell(`<h2>Nhật ký thao tác</h2><div class="bar"><input id="aq" placeholder="Tìm trong mô tả" value="${esc(AF.q)}"><select id="aa"><option value="">Mọi hành động</option>${r.actions.map(a=>`<option ${AF.action===a?'selected':''}>${esc(a)}</option>`).join('')}</select><label>Từ <input id="af" type="date" ${mx?`max="${mx}"`:''} value="${esc(AF.from)}"></label><label>đến <input id="at" type="date" ${mx?`max="${mx}"`:''} value="${esc(AF.to)}"></label><button id="ar">Xóa lọc</button></div><div class="card"><div class="tbl-wrap"><table><tr><th>Thời gian</th><th>Hành động</th><th>Mô tả</th></tr>${r.items.map(a=>`<tr><td data-l="Thời gian">${dtc(a.createdAt)}</td><td data-l="Hành động"><span class="tag act ${actCls(a.action)}">${esc(a.action)}</span></td><td data-l="Mô tả">${esc(a.description)}</td></tr>`).join('')||'<tr><td colspan="3">Không có kết quả.</td></tr>'}</table></div>${pager(r,'audit')}</div>`);
-  const re=fq=>{const n={q:$('#aq').value,action:$('#aa').value,from:$('#af').value,to:$('#at').value};
+  shell(`<h2>Nhật ký thao tác</h2><div class="bar"><input id="aq" placeholder="Tìm trong mô tả" value="${esc(AF.q)}"><select id="aa"><option value="">Mọi hành động</option>${r.actions.map(a=>`<option ${AF.action===a?'selected':''}>${esc(a)}</option>`).join('')}</select><select id="au"><option value="">Mọi người thực hiện</option>${r.people.map(x=>`<option value="${esc(x.id)}" ${AF.user===x.id?'selected':''}>${esc(x.username)}</option>`).join('')}</select><label>Từ <input id="af" type="date" ${mx?`max="${mx}"`:''} value="${esc(AF.from)}"></label><label>đến <input id="at" type="date" ${mx?`max="${mx}"`:''} value="${esc(AF.to)}"></label><button id="ar">Xóa lọc</button></div><div class="card"><div class="tbl-wrap"><table class="audit"><tr><th>Thời gian</th><th>Hành động</th><th>Người thực hiện</th><th>Người bị tác động</th><th>Mô tả</th></tr>${r.items.map(a=>`<tr><td data-l="Thời gian">${dtc(a.createdAt)}</td><td data-l="Hành động"><span class="tag act ${actCls(a.action)}">${esc(a.action)}</span></td><td data-l="Người thực hiện">${esc(a.actorUsername)||'—'}</td><td data-l="Người bị tác động">${esc(a.targetUsername)||'—'}</td><td data-l="Mô tả">${esc(a.description)}</td></tr>`).join('')||'<tr><td colspan="5">Không có kết quả.</td></tr>'}</table></div>${pager(r,'audit')}</div>`);
+  const re=fq=>{const n={q:$('#aq').value,action:$('#aa').value,user:$('#au').value,from:$('#af').value,to:$('#at').value};
     if(n.from&&n.to&&n.from>n.to)return toast('Từ ngày phải trước hoặc bằng Đến ngày','warn');
     AF={...n,page:1};auditView().then(()=>{if(fq){const q=$('#aq');q.focus();q.setSelectionRange(99,99)}}).catch(x=>toast(x.message,'err'))};
-  $('#aq').oninput=()=>{clearTimeout(re.h);re.h=setTimeout(()=>re(true),250)};['#aa','#af','#at'].forEach(k=>$(k).onchange=()=>re());
-  $('#ar').onclick=()=>{AF={q:'',action:'',from:'',to:'',page:1};route()}}
+  $('#aq').oninput=()=>{clearTimeout(re.h);re.h=setTimeout(()=>re(true),250)};['#aa','#au','#af','#at'].forEach(k=>$(k).onchange=()=>re());
+  $('#ar').onclick=()=>{AF={q:'',action:'',user:'',from:'',to:'',page:1};route()}}
 
 const reload=()=>route();
 const A={
@@ -214,7 +258,7 @@ document.addEventListener('click',e=>{
   const g=e.target.closest('[data-go]'),t=e.target.closest('[data-tab]'),a=e.target.closest('[data-act]');
   if(e.target.closest('nav a'))document.body.classList.remove('nav-open');
   if(g){location.hash='/'+g.dataset.go;return}
-  if(t){TAB=t.dataset.tab;route();return}
+  if(t){if(!switchTab(t.dataset.tab,t.dataset.id)){TAB=t.dataset.tab;route()}return}
   if(a&&A[a.dataset.act])run(()=>A[a.dataset.act]({...a.dataset}))});
 document.addEventListener('click',e=>{const s=e.target.closest('details.more>summary');
   document.querySelectorAll('details.more[open]').forEach(d=>{if(!d.contains(e.target)||e.target.closest('[data-act]'))d.open=false});
